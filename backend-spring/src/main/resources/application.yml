@@ -1,0 +1,28 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/freshbite}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 20000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        physical_naming_strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+app:
+  web-origin: ${WEB_ORIGIN:http://localhost:3000}
+  llm:
+    base-url: ${LLM_BASE_URL:http://localhost:8000}

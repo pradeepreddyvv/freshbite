@@ -1,0 +1,106 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// CORE MODELS
+
+model Restaurant {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  city      String
+  state     String?
+  country   String   @default("USA")
+  timezone  String   @default("America/Los_Angeles") // IANA timezone for future meal slot derivation
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dishesAtRestaurant DishAtRestaurant[]
+
+  @@index([city])
+}
+
+model Dish {
+  id          String   @id @default(cuid())
+  name        String
+  cuisine     String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dishesAtRestaurant DishAtRestaurant[]
+
+  @@index([name])
+}
+
+// First-class entity: dish AT a specific restaurant location
+model DishAtRestaurant {
+  id           String   @id @default(cuid())
+  restaurantId String
+  dishId       String
+  price        Float?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  dish       Dish       @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  reviews    Review[]
+  alerts     AlertSubscription[]
+
+  @@unique([restaurantId, dishId])
+  @@index([restaurantId])
+  @@index([dishId])
+}
+
+// Append-only log: NEVER deleted
+model Review {
+  id                  String    @id @default(cuid())
+  dishAtRestaurantId  String
+  rating              Int // 1-5
+  text                String
+  createdAt           DateTime  @default(now()) // Always UTC
+  visitedAt           DateTime? // Optional: when the user actually ate there
+  mealSlot            MealSlot? // V2: breakfast, lunch, dinner, late_night (derived from createdAt + restaurant timezone)
+
+  dishAtRestaurant DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
+
+  // CRITICAL INDEX: time-window queries
+  @@index([dishAtRestaurantId, createdAt(sort: Desc)])
+  @@index([createdAt])
+}
+
+enum MealSlot {
+  BREAKFAST  // 5am-11am
+  LUNCH      // 11am-3pm
+  DINNER     // 3pm-10pm
+  LATE_NIGHT // 10pm-5am
+}
+
+// V2+ Feature: Alert subscriptions (stub for MVP)
+model AlertSubscription {
+  id                 String   @id @default(cuid())
+  dishAtRestaurantId String
+  email              String? // For future email notifications
+  phone              String? // For future SMS notifications
+  window             String   @default("24h") // 24h, 48h, 5d
+  minRating          Float    @default(3.0) // Alert if avg drops below this
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  dishAtRestaurant DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
+
+  @@index([dishAtRestaurantId])
+  @@index([isActive])
+}

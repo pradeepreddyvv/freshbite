@@ -1,0 +1,10 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "llm-service/Dockerfile"
+watchPatterns = ["llm-service/**"]
+
+[deploy]
+healthcheckPath = "/docs"
+healthcheckTimeout = 10
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Next.js (lint + typecheck + build) ───
+  nextjs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+
+  # ─── Spring Boot (compile + package) ───
+  spring-boot:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-spring
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - run: chmod +x mvnw
+      - run: ./mvnw package -DskipTests -q
+
+  # ─── FastAPI (syntax check) ───
+  fastapi:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: llm-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+      - run: python -c "import main; print('FastAPI app imports OK')"
