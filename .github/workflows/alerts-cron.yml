@@ -1,0 +1,22 @@
+name: Hourly Alerts Check
+
+on:
+  schedule:
+    # Run every hour at minute 0
+    - cron: '0 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  run-alerts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger alerts endpoint
+        run: |
+          curl -X POST "${{ secrets.SITE_URL }}/api/alerts/run" \
+            -H "Authorization: Bearer ${{ secrets.ALERTS_SECRET_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
+
+      - name: Log completion
+        run: echo "Alerts check completed at $(date)"
