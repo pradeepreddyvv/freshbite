@@ -33,7 +33,7 @@ sudo chown $USER:$USER /opt/freshbite
 # Clone repository (you'll need to add deploy key or use HTTPS with token)
 echo "📥 Clone your GitHub repository manually:"
 echo "   cd /opt/freshbite"
-echo "   git clone https://github.com/YOUR_USERNAME/freshbite.git ."
+echo "   git clone https://github.com/pradeepreddyvv/freshbite.git ."
 
 # Create .env file
 echo "⚙️  Creating .env file..."
