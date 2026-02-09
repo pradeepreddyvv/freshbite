@@ -53,5 +53,13 @@ llm-service/.venv/
 
 # SSH keys and secrets
 serects/
+secrets/
 *.pem
 *.key
+id_rsa*
+id_ed25519*
+
+# Production env files
+.env.prod
+.env.production
+ssl/
