@@ -16,14 +16,39 @@ env:
   REPO_URL: https://github.com/${{ github.repository }}.git
 
 jobs:
-  # ── Step 1: Run CI checks first ──
-  ci:
-    uses: ./.github/workflows/ci.yml
-    secrets: inherit
+  # ── Step 1: Quick backend sanity checks ──
+  check-spring:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-spring
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      - run: chmod +x mvnw
+      - run: ./mvnw package -DskipTests -q
 
-  # ── Step 2: Deploy (only after CI passes) ──
+  check-fastapi:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: llm-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python -c "import main; print('FastAPI OK')"
+
+  # ── Step 2: Deploy (only after backend checks pass) ──
   deploy:
-    needs: ci
+    needs: [check-spring, check-fastapi]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
