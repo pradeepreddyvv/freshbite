@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  spring-boot:
+    build:
+      context: .
+      dockerfile: backend-spring/Dockerfile
+    container_name: freshbite-spring
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - WEB_ORIGIN=${WEB_ORIGIN}
+      - LLM_BASE_URL=http://llm-service:8000
+      - SERVER_PORT=8080
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    restart: unless-stopped
+    depends_on:
+      - llm-service
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/restaurants"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  llm-service:
+    build:
+      context: .
+      dockerfile: llm-service/Dockerfile
+    container_name: freshbite-llm
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Nginx reverse proxy for better security
+  nginx:
+    image: nginx:alpine
+    container_name: freshbite-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    restart: unless-stopped
+    depends_on:
+      - spring-boot
+      - llm-service

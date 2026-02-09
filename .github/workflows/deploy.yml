@@ -1,0 +1,47 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to DigitalOcean Droplet
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /opt/freshbite
+            
+            # Pull latest code
+            git pull origin main
+            
+            # Create .env file from secrets
+            cat > .env << EOF
+            SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
+            SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
+            SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+            WEB_ORIGIN=${{ secrets.WEB_ORIGIN }}
+            EOF
+            
+            # Rebuild and restart services
+            docker-compose pull
+            docker-compose build --no-cache
+            docker-compose up -d
+            
+            # Clean up old images
+            docker image prune -f
+            
+            # Show status
+            docker-compose ps
+            
+            # Wait for health checks
+            sleep 15
+            curl -f http://localhost/health || exit 1
+            
+            echo "✅ Deployment successful!"
