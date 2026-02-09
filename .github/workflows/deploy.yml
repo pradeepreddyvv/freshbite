@@ -3,45 +3,124 @@ name: Deploy to DigitalOcean
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allow manual trigger
+    paths:
+      - 'backend-spring/**'
+      - 'llm-service/**'
+      - 'docker-compose.yml'
+      - 'nginx.conf'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:  # Manual trigger for disaster recovery
+
+env:
+  APP_DIR: /opt/freshbite
+  REPO_URL: https://github.com/${{ github.repository }}.git
 
 jobs:
+  # ── Step 1: Run CI checks first ──
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  # ── Step 2: Deploy (only after CI passes) ──
   deploy:
+    needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Deploy to DigitalOcean Droplet
+      - name: 🚀 Bootstrap & Deploy to Droplet
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
+          username: root
           key: ${{ secrets.DROPLET_SSH_KEY }}
+          command_timeout: 12m
           script: |
-            cd /opt/freshbite
-            
-            # Pull latest code
-            git pull origin main
-            
-            # Create .env file from secrets
-            cat > .env << EOF
+            set -euo pipefail
+
+            APP_DIR="/opt/freshbite"
+
+            # ── 1. Ensure Docker is installed (idempotent) ──
+            if ! command -v docker &> /dev/null; then
+              echo "📦 Installing Docker..."
+              apt-get update -qq
+              apt-get install -y -qq curl git
+              curl -fsSL https://get.docker.com | sh
+            fi
+
+            if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
+              echo "📦 Installing Docker Compose plugin..."
+              apt-get install -y -qq docker-compose-plugin
+            fi
+
+            # Determine compose command
+            if docker compose version &> /dev/null; then
+              COMPOSE="docker compose"
+            else
+              COMPOSE="docker-compose"
+            fi
+
+            # ── 2. Clone or pull repo ──
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "📥 Cloning repository..."
+              mkdir -p "$APP_DIR"
+              git clone ${{ env.REPO_URL }} "$APP_DIR"
+            else
+              echo "📥 Pulling latest changes..."
+              cd "$APP_DIR"
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            cd "$APP_DIR"
+
+            # ── 3. Write .env.prod (secrets from GitHub, never in repo) ──
+            cat > .env.prod << 'ENVEOF'
             SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
             SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
             SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
             WEB_ORIGIN=${{ secrets.WEB_ORIGIN }}
-            EOF
-            
-            # Rebuild and restart services
-            docker-compose pull
-            docker-compose build --no-cache
-            docker-compose up -d
-            
-            # Clean up old images
-            docker image prune -f
-            
-            # Show status
-            docker-compose ps
-            
-            # Wait for health checks
-            sleep 15
-            curl -f http://localhost/health || exit 1
-            
-            echo "✅ Deployment successful!"
+            ENVEOF
+
+            # Remove leading whitespace from heredoc
+            sed -i 's/^[[:space:]]*//' .env.prod
+
+            chmod 600 .env.prod
+
+            # ── 4. Build & deploy ──
+            echo "🔨 Building and deploying containers..."
+            $COMPOSE down --remove-orphans 2>/dev/null || true
+            $COMPOSE build --no-cache
+            $COMPOSE up -d
+
+            # ── 5. Wait for health checks ──
+            echo "⏳ Waiting for services to become healthy..."
+            RETRIES=0
+            MAX_RETRIES=20
+            until [ "$RETRIES" -ge "$MAX_RETRIES" ]; do
+              if curl -sf http://localhost/health > /dev/null 2>&1; then
+                echo "✅ Health check passed!"
+                break
+              fi
+              RETRIES=$((RETRIES + 1))
+              echo "   Attempt $RETRIES/$MAX_RETRIES — waiting 5s..."
+              sleep 5
+            done
+
+            if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
+              echo "❌ Health check failed after $MAX_RETRIES attempts"
+              echo "── Container status ──"
+              $COMPOSE ps
+              echo "── Spring Boot logs ──"
+              $COMPOSE logs --tail=30 spring-boot
+              echo "── LLM logs ──"
+              $COMPOSE logs --tail=15 llm-service
+              exit 1
+            fi
+
+            # ── 6. Cleanup ──
+            docker image prune -f > /dev/null 2>&1
+            echo ""
+            echo "── Running containers ──"
+            $COMPOSE ps
+            echo ""
+            echo "🎉 Deployment successful!"
