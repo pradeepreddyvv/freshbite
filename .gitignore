@@ -50,3 +50,8 @@ llm-service/.venv/
 .vscode/
 *.swp
 *.swo
+
+# SSH keys and secrets
+serects/
+*.pem
+*.key
