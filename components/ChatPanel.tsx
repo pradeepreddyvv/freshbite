@@ -97,7 +97,7 @@ export function ChatPanel({ dishId, window = '24h' }: ChatPanelProps) {
     setIsLoading(true);
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
       const res = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

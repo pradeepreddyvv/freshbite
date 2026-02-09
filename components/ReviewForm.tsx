@@ -21,7 +21,7 @@ export function ReviewForm({ dishId, onSuccess }: ReviewFormProps) {
     setIsSubmitting(true);
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
       const response = await fetch(`${baseUrl}/api/dish/${dishId}/reviews`, {
         method: 'POST',
         headers: {

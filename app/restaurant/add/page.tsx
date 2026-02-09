@@ -26,7 +26,7 @@ export default function AddRestaurantPage() {
     };
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
       const res = await fetch(`${baseUrl}/api/restaurants`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
