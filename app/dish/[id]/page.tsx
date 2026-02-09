@@ -6,6 +6,7 @@ import { ReviewForm } from '@/components/ReviewForm';
 import { ChatPanel } from '@/components/ChatPanel';
 import { normalizeTimeWindow } from '@/lib/time-window';
 import type { TimeWindow } from '@/lib/time-window';
+import type { RiskLevel } from '@/lib/risk-label';
 
 interface PageProps {
   params: {
@@ -35,7 +36,7 @@ interface DishSummaryResponse {
     window: TimeWindow;
   };
   risk: {
-    level: string;
+    level: RiskLevel;
     label: string;
     emoji: string;
     color: string;
