@@ -8,7 +8,8 @@ on:
   workflow_call:  # Allow deploy.yml to call this workflow
 
 jobs:
-  # ─── Next.js (lint + typecheck + build) ───
+  # ─── Next.js (lint + typecheck) ───
+  # Note: full build is handled by Vercel on deploy — we only check code quality here
   nextjs:
     runs-on: ubuntu-latest
     steps:
@@ -23,10 +24,6 @@ jobs:
       - run: npx prisma generate
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm run build
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
 
   # ─── Spring Boot (compile + package) ───
   spring-boot:
