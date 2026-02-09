@@ -7,19 +7,26 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
-  private final String[] webOrigins;
+  private final String webOrigin;
 
   public WebConfig(@Value("${app.web-origin}") String webOrigin) {
-    // Support comma-separated origins: "http://localhost:3000,https://my-app.vercel.app"
-    this.webOrigins = webOrigin.split(",");
+    this.webOrigin = webOrigin;
   }
 
   @Override
   public void addCorsMappings(CorsRegistry registry) {
-    registry.addMapping("/api/**")
-      .allowedOrigins(webOrigins)
+    var mapping = registry.addMapping("/api/**")
       .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-      .allowedHeaders("*")
-      .allowCredentials(true);
+      .allowedHeaders("*");
+
+    if ("*".equals(webOrigin.trim())) {
+      // Allow all origins (dev/testing) — uses patterns to stay compatible with credentials
+      mapping.allowedOriginPatterns("*")
+             .allowCredentials(false);
+    } else {
+      // Production: explicit comma-separated origins
+      mapping.allowedOrigins(webOrigin.split(","))
+             .allowCredentials(true);
+    }
   }
 }
