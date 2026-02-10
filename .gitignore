@@ -52,7 +52,6 @@ llm-service/.venv/
 *.swo
 
 # SSH keys and secrets
-serects/
 secrets/
 *.pem
 *.key

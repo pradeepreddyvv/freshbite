@@ -133,7 +133,7 @@ export default function DiscoverPage() {
     setLoading(true);
     setError(null);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+      const baseUrl = process.env.BACKEND_URL || '';
       const params = new URLSearchParams();
       if (loc && !locationText) {
         params.set('lat', loc.lat.toString());
@@ -370,7 +370,7 @@ export default function DiscoverPage() {
               const handleImport = async (e: React.MouseEvent) => {
                 e.stopPropagation();
                 try {
-                  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+                  const baseUrl = process.env.BACKEND_URL || '';
                   const res = await fetch(`${baseUrl}/api/restaurants`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

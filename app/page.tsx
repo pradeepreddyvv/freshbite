@@ -42,7 +42,7 @@ export default function HomePage() {
 
   // Fetch dishes from Spring Boot
   useEffect(() => {
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+    const baseUrl = process.env.BACKEND_URL || '';
     fetch(`${baseUrl}/api/dishes`)
       .then(res => res.ok ? res.json() : [])
       .then(setDishes)
@@ -62,7 +62,7 @@ export default function HomePage() {
         setLocationStatus('granted');
         const { latitude, longitude } = position.coords;
         try {
-          const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+          const baseUrl = process.env.BACKEND_URL || '';
           const res = await fetch(
             `${baseUrl}/api/discover?lat=${latitude}&lng=${longitude}&radius=5000`
           );

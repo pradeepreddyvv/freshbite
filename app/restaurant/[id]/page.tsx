@@ -33,7 +33,7 @@ export default function RestaurantPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+  const baseUrl = process.env.BACKEND_URL || '';
 
   useEffect(() => {
     fetchData();
