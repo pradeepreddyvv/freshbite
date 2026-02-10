@@ -19,6 +19,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: Production
+    env:
+      VERCEL_ORG_ID: team_Uwa2956V7hVKnfrpmKSlVErz
+      VERCEL_PROJECT_ID: prj_abTcmobPFaL404OsEY0eBo1t6N3w
     steps:
       - uses: actions/checkout@v4
 
@@ -49,9 +52,9 @@ jobs:
       - name: Verify Deployment
         run: |
           sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.deploy.outputs.url }}")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://v0-freshbite.vercel.app")
           if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
-            echo "✅ Frontend is live at ${{ steps.deploy.outputs.url }}"
+            echo "✅ Frontend is live at https://v0-freshbite.vercel.app"
           else
             echo "⚠️ Got HTTP $STATUS — check the deployment"
           fi
