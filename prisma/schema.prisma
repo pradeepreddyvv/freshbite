@@ -16,8 +16,8 @@ datasource db {
 model Restaurant {
   id        String   @id @default(cuid())
   name      String
-  address   String
-  city      String
+  address   String?
+  city      String?
   state     String?
   country   String   @default("USA")
   timezone  String   @default("America/Los_Angeles") // IANA timezone for future meal slot derivation

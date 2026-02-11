@@ -68,9 +68,9 @@ public class RestaurantController {
     Restaurant restaurant = new Restaurant();
     restaurant.setId(generateCuid());
     restaurant.setName(request.name());
-    restaurant.setAddress(request.address());
-    restaurant.setCity(request.city());
-    if (request.state() != null) restaurant.setState(request.state());
+    restaurant.setAddress(request.address() != null && !request.address().isBlank() ? request.address() : null);
+    restaurant.setCity(request.city() != null && !request.city().isBlank() ? request.city() : null);
+    if (request.state() != null && !request.state().isBlank()) restaurant.setState(request.state());
     if (request.country() != null) restaurant.setCountry(request.country());
     if (request.timezone() != null) restaurant.setTimezone(request.timezone());
     if (request.latitude() != null) restaurant.setLatitude(request.latitude());

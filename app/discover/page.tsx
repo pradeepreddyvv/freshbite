@@ -75,6 +75,8 @@ export default function DiscoverPage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<'pending' | 'granted' | 'denied' | 'unavailable'>('pending');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [importingId, setImportingId] = useState<string | null>(null); // tracks which restaurant is showing the import form
+  const [importForm, setImportForm] = useState<{ address: string; city: string }>({ address: '', city: '' });
   const [error, setError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const initialSearchDone = useRef(false);
@@ -367,8 +369,18 @@ export default function DiscoverPage() {
                 }
               };
 
-              const handleImport = async (e: React.MouseEvent) => {
+              const handleImport = async (e: React.MouseEvent, overrides?: { address: string; city: string }) => {
                 e.stopPropagation();
+                const address = overrides?.address || r.address || '';
+                const city = overrides?.city || r.city || '';
+
+                // If address or city is missing and no overrides provided, show the form
+                if (!address && !city && !overrides) {
+                  setImportingId(rid);
+                  setImportForm({ address: '', city: '' });
+                  return;
+                }
+
                 try {
                   const baseUrl = process.env.BACKEND_URL || '';
                   const res = await fetch(`${baseUrl}/api/restaurants`, {
@@ -376,16 +388,17 @@ export default function DiscoverPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       name: r.name,
-                      address: r.address || '',
-                      city: r.city || '',
-                      state: r.state || '',
-                      country: r.country || '',
+                      address: address || undefined,
+                      city: city || undefined,
+                      state: r.state || undefined,
+                      country: r.country || undefined,
                       latitude: r.latitude,
                       longitude: r.longitude,
                     }),
                   });
                   if (res.ok) {
                     const created = await res.json();
+                    setImportingId(null);
                     router.push(`/restaurant/${created.id}`);
                   }
                 } catch (err) {
@@ -460,11 +473,57 @@ export default function DiscoverPage() {
                   </div>
 
                   {/* Action row */}
-                  <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
+                  <div className="mt-2 pt-2 border-t border-gray-100">
                     {r.freshbiteId ? (
                       <span className="text-xs text-green-600 font-medium">
                         ✅ On FreshBite — View dishes →
                       </span>
+                    ) : importingId === rid ? (
+                      /* Inline form for missing address/city */
+                      <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-xs text-amber-600 font-medium">📍 Address info missing — please fill in:</p>
+                        {!r.address && (
+                          <input
+                            type="text"
+                            placeholder="Street address (optional)"
+                            value={importForm.address}
+                            onChange={(e) => setImportForm(f => ({ ...f, address: e.target.value }))}
+                            className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-400"
+                          />
+                        )}
+                        {!r.city && (
+                          <input
+                            type="text"
+                            placeholder="City (optional)"
+                            value={importForm.city}
+                            onChange={(e) => setImportForm(f => ({ ...f, city: e.target.value }))}
+                            className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-400"
+                          />
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => handleImport(e, {
+                              address: importForm.address || r.address || '',
+                              city: importForm.city || r.city || '',
+                            })}
+                            className="text-xs bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1 rounded-md transition-colors"
+                          >
+                            Add to FreshBite
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleImport(e, { address: '', city: '' }); }}
+                            className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                          >
+                            Skip — add without details
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setImportingId(null); }}
+                            className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
                     ) : (
                       <button
                         onClick={handleImport}

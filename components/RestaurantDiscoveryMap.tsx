@@ -169,7 +169,7 @@ export default function RestaurantDiscoveryMap({
           <div style="max-width:220px;">
             <strong style="font-size:13px;">${restaurant.name}</strong>
             <br/><span style="color:#9ca3af;font-size:10px;">${typeLabel}</span>
-            <br/><span style="color:#6b7280;font-size:11px;">📍 ${restaurant.address}${restaurant.city ? ', ' + restaurant.city : ''}</span>
+            <br/><span style="color:#6b7280;font-size:11px;">${restaurant.address || restaurant.city ? '📍 ' : ''}${restaurant.address || ''}${restaurant.address && restaurant.city ? ', ' : ''}${restaurant.city || ''}</span>
             ${cuisineText}${distText}
           </div>
         `);
