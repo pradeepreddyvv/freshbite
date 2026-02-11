@@ -40,7 +40,7 @@ jobs:
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BACKEND_URL: http://REDACTED_IP
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
 
       - name: Deploy to Vercel
         id: deploy

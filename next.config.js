@@ -6,7 +6,7 @@ const nextConfig = {
   // Proxy Spring Boot API calls through Vercel to avoid mixed-content (HTTPS→HTTP)
   // and CORS issues. Fallback rewrites only trigger when no Next.js API route matches.
   async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || 'http://REDACTED_IP';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
     return {
       fallback: [
         {

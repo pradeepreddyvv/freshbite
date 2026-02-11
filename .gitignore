@@ -62,3 +62,7 @@ id_ed25519*
 .env.prod
 .env.production
 ssl/
+
+# Postman environments (may contain secrets/IPs)
+*.postman_environment.json
+postman/

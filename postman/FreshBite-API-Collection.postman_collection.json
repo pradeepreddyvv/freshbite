@@ -9,7 +9,7 @@
     { "key": "nextjs_url", "value": "http://localhost:3000", "type": "string" },
     { "key": "spring_url", "value": "http://localhost:8080", "type": "string" },
     { "key": "fastapi_url", "value": "http://localhost:8000", "type": "string" },
-    { "key": "droplet_url", "value": "http://REDACTED_IP", "type": "string" },
+    { "key": "droplet_url", "value": "http://YOUR_DROPLET_IP", "type": "string" },
     { "key": "vercel_url", "value": "https://v0-freshbite.vercel.app", "type": "string" },
     { "key": "dish_id", "value": "REPLACE_WITH_ACTUAL_ID", "type": "string" },
     { "key": "restaurant_id", "value": "REPLACE_WITH_ACTUAL_ID", "type": "string" },
