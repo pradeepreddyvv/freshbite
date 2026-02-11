@@ -33,12 +33,12 @@ interface DiscoveredRestaurant {
   phone: string | null;
   website: string | null;
   openingHours: string | null;
-  type: string;       // "restaurant" | "fast_food" | "cafe"
+  type: string;
   latitude: number;
   longitude: number;
   distanceKm: number | null;
-  source: string;     // "osm" | "freshbite"
-  freshbiteId: string | null;  // non-null for source=freshbite
+  source: string;
+  freshbiteId: string | null;
 }
 
 interface DiscoverResponse {
@@ -64,8 +64,7 @@ const TYPE_EMOJIS: Record<string, string> = {
 };
 
 export default function DiscoverPage() {
-  const [location, setLocation] = useState('');
-  const [nameFilter, setNameFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [radius, setRadius] = useState(5000);
   const [results, setResults] = useState<DiscoveredRestaurant[]>([]);
   const [resolvedLocation, setResolvedLocation] = useState<string | null>(null);
@@ -75,60 +74,51 @@ export default function DiscoverPage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<'pending' | 'granted' | 'denied' | 'unavailable'>('pending');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [importingId, setImportingId] = useState<string | null>(null); // tracks which restaurant is showing the import form
+  const [importingId, setImportingId] = useState<string | null>(null);
   const [importForm, setImportForm] = useState<{ address: string; city: string }>({ address: '', city: '' });
   const [error, setError] = useState<string | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const initialSearchDone = useRef(false);
   const listContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // Scroll selected card into view
   const handleSelectRestaurant = useCallback((id: string | null) => {
     setSelectedId(id);
     if (id && listContainerRef.current) {
       const el = listContainerRef.current.querySelector(`[data-rid="${id}"]`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }, []);
 
-  // Request browser geolocation on mount
+  // GPS on mount
   useEffect(() => {
     if (!navigator.geolocation) {
       setLocationStatus('unavailable');
       return;
     }
-
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
         setUserLocation(loc);
         setLocationStatus('granted');
-        // Auto-search on first load with user location
         if (!initialSearchDone.current) {
           initialSearchDone.current = true;
-          doSearch(loc, '', '', radius);
+          doSearch(loc, '', radius);
         }
       },
-      () => {
-        setLocationStatus('denied');
-      },
+      () => setLocationStatus('denied'),
       { enableHighAccuracy: false, timeout: 10000 }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Unified search: the query can be a location, restaurant name, address, or pincode
   const doSearch = async (
     loc: { lat: number; lng: number } | null,
-    locationText: string,
-    name: string,
+    query: string,
     radiusM: number
   ) => {
-    // Need either a location or coordinates
-    if (!loc && !locationText) {
-      setError('Please enter a location or enable browser geolocation.');
+    if (!loc && !query) {
+      setError('Please enter a location, address, restaurant name, or pincode — or enable GPS.');
       return;
     }
 
@@ -137,12 +127,17 @@ export default function DiscoverPage() {
     try {
       const baseUrl = process.env.BACKEND_URL || '';
       const params = new URLSearchParams();
-      if (loc && !locationText) {
+
+      if (query.trim()) {
+        // Send the same query as both location and name — the backend
+        // will geocode it as a location AND filter by restaurant name
+        params.set('location', query.trim());
+        params.set('name', query.trim());
+      } else if (loc) {
         params.set('lat', loc.lat.toString());
         params.set('lng', loc.lng.toString());
       }
-      if (locationText) params.set('location', locationText);
-      if (name) params.set('name', name);
+
       params.set('radius', radiusM.toString());
       params.set('limit', '150');
 
@@ -164,21 +159,7 @@ export default function DiscoverPage() {
     }
   };
 
-  const handleSearch = () => {
-    doSearch(userLocation, location, nameFilter, radius);
-  };
-
-  // Debounced name-only search
-  const handleNameChange = (val: string) => {
-    setNameFilter(val);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    // Only auto-search if we already have results (i.e., a location is established)
-    if (mapCenter || userLocation) {
-      searchTimeoutRef.current = setTimeout(() => {
-        doSearch(userLocation, location, val, radius);
-      }, 600);
-    }
-  };
+  const handleSearch = () => doSearch(userLocation, searchQuery, radius);
 
   const mapRestaurants: MapRestaurant[] = results.map((r, i) => ({
     id: r.osmId || `osm-${i}`,
@@ -202,7 +183,7 @@ export default function DiscoverPage() {
             <Link href="/" className="text-green-600 hover:text-green-700 text-sm font-medium">
               ← Home
             </Link>
-            <h1 className="text-2xl font-bold text-gray-900">🗺️ Discover Real Restaurants</h1>
+            <h1 className="text-2xl font-bold text-gray-900">🗺️ Discover Restaurants</h1>
           </div>
           <div className="flex items-center gap-2 text-sm">
             {locationStatus === 'granted' && (
@@ -225,36 +206,23 @@ export default function DiscoverPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Search Controls */}
+        {/* Unified Search */}
         <div className="mb-6 bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            {/* Location input */}
-            <div className="md:col-span-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1">📍 Location</label>
+            {/* Single search input */}
+            <div className="md:col-span-7">
+              <label className="block text-xs font-medium text-gray-500 mb-1">🔍 Search</label>
               <input
                 type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Phoenix, AZ  or  Arizona  or  Tokyo"
+                placeholder="Restaurant name, city, address, or pincode..."
                 className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 text-gray-900 outline-none text-sm"
               />
-              {userLocation && !location && (
+              {userLocation && !searchQuery && (
                 <p className="text-[10px] text-gray-400 mt-0.5">Leave empty to use GPS location</p>
               )}
-            </div>
-
-            {/* Name filter */}
-            <div className="md:col-span-3">
-              <label className="block text-xs font-medium text-gray-500 mb-1">🔍 Restaurant Name</label>
-              <input
-                type="text"
-                value={nameFilter}
-                onChange={(e) => handleNameChange(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="McDonald's, Subway, KFC..."
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 text-gray-900 outline-none text-sm"
-              />
             </div>
 
             {/* Radius */}
@@ -271,7 +239,7 @@ export default function DiscoverPage() {
               </select>
             </div>
 
-            {/* Search button */}
+            {/* Buttons */}
             <div className="md:col-span-3 flex gap-2">
               <button
                 onClick={handleSearch}
@@ -289,7 +257,7 @@ export default function DiscoverPage() {
               </button>
               {userLocation && (
                 <button
-                  onClick={() => { setLocation(''); doSearch(userLocation, '', nameFilter, radius); }}
+                  onClick={() => { setSearchQuery(''); doSearch(userLocation, '', radius); }}
                   disabled={loading}
                   className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium py-2.5 px-3 rounded-lg transition-colors text-sm"
                   title="Search near me"
@@ -300,14 +268,13 @@ export default function DiscoverPage() {
             </div>
           </div>
 
-          {/* Resolved location banner */}
+          {/* Status banners */}
           {resolvedLocation && (
             <div className="mt-3 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
               📌 Showing results near: <strong className="text-gray-700">{resolvedLocation}</strong>
               {' · '}{totalResults} results
             </div>
           )}
-
           {error && (
             <div className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
               ⚠️ {error}
@@ -340,19 +307,19 @@ export default function DiscoverPage() {
           <div ref={listContainerRef} className="lg:col-span-2 space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
             <p className="text-sm text-gray-500 mb-2">
               {results.length} restaurant{results.length !== 1 ? 's' : ''} found
-              {nameFilter && ` matching "${nameFilter}"`}
+              {searchQuery && ` for "${searchQuery}"`}
             </p>
 
             {results.length === 0 && !loading && (
               <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                 <div className="text-4xl mb-3">🌍</div>
                 <p className="text-gray-500">
-                  {location || nameFilter
-                    ? 'No restaurants found — try a larger radius or different search'
+                  {searchQuery
+                    ? 'No restaurants found — try a different search or larger radius'
                     : 'Enter a location or allow GPS to discover restaurants'}
                 </p>
                 <p className="text-xs text-gray-400 mt-2">
-                  Powered by OpenStreetMap — millions of real restaurants worldwide
+                  Search by restaurant name, city, address, or pincode
                 </p>
               </div>
             )}
@@ -364,9 +331,7 @@ export default function DiscoverPage() {
 
               const handleCardClick = () => {
                 handleSelectRestaurant(rid);
-                if (r.freshbiteId) {
-                  router.push(`/restaurant/${r.freshbiteId}`);
-                }
+                if (r.freshbiteId) router.push(`/restaurant/${r.freshbiteId}`);
               };
 
               const handleImport = async (e: React.MouseEvent, overrides?: { address: string; city: string }) => {
@@ -374,7 +339,6 @@ export default function DiscoverPage() {
                 const address = overrides?.address || r.address || '';
                 const city = overrides?.city || r.city || '';
 
-                // If address or city is missing and no overrides provided, show the form
                 if (!address && !city && !overrides) {
                   setImportingId(rid);
                   setImportForm({ address: '', city: '' });
@@ -432,23 +396,16 @@ export default function DiscoverPage() {
                         </span>
                       </div>
 
-                      {r.address && (
+                      {(r.address || r.city) && (
                         <p className="text-xs text-gray-500 mt-0.5 truncate">
-                          📍 {r.address}
-                          {r.city ? `, ${r.city}` : ''}
+                          📍 {r.address || ''}{r.address && r.city ? `, ${r.city}` : r.city || ''}
                         </p>
                       )}
 
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                        {r.cuisine && (
-                          <span className="text-[11px] text-gray-400">🍴 {r.cuisine}</span>
-                        )}
-                        {r.phone && (
-                          <span className="text-[11px] text-gray-400">📞 {r.phone}</span>
-                        )}
-                        {r.openingHours && (
-                          <span className="text-[11px] text-gray-400">🕐 {r.openingHours}</span>
-                        )}
+                        {r.cuisine && <span className="text-[11px] text-gray-400">🍴 {r.cuisine}</span>}
+                        {r.phone && <span className="text-[11px] text-gray-400">📞 {r.phone}</span>}
+                        {r.openingHours && <span className="text-[11px] text-gray-400">🕐 {r.openingHours}</span>}
                       </div>
                     </div>
 
@@ -479,7 +436,6 @@ export default function DiscoverPage() {
                         ✅ On FreshBite — View dishes →
                       </span>
                     ) : importingId === rid ? (
-                      /* Inline form for missing address/city */
                       <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                         <p className="text-xs text-amber-600 font-medium">📍 Address info missing — please fill in:</p>
                         {!r.address && (
@@ -514,7 +470,7 @@ export default function DiscoverPage() {
                             onClick={(e) => { e.stopPropagation(); handleImport(e, { address: '', city: '' }); }}
                             className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
                           >
-                            Skip — add without details
+                            Skip
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setImportingId(null); }}
@@ -533,7 +489,7 @@ export default function DiscoverPage() {
                       </button>
                     )}
                     {r.source === 'freshbite' && (
-                      <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">FreshBite</span>
+                      <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded ml-2">FreshBite</span>
                     )}
                   </div>
                 </div>
@@ -542,7 +498,6 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* Footer info */}
         <div className="mt-6 text-center text-xs text-gray-400">
           Data powered by <strong>OpenStreetMap</strong> (Overpass API + Nominatim) — free & open-source 🌍
         </div>

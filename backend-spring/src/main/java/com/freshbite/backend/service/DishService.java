@@ -37,6 +37,14 @@ public class DishService {
       .toList();
   }
 
+  public List<DishListItemResponse> searchDishes(String query) {
+    log.debug("DishService.searchDishes q={}", query);
+    return dishAtRestaurantRepository.searchByQuery(query)
+      .stream()
+      .map(this::toDishListItem)
+      .toList();
+  }
+
   public DishSummaryResponse getSummary(String dishAtRestaurantId, TimeWindow window) {
     log.debug("DishService.getSummary id={} window={}", dishAtRestaurantId, window.getValue());
     DishAtRestaurant dishAtRestaurant = dishAtRestaurantRepository.findById(dishAtRestaurantId)

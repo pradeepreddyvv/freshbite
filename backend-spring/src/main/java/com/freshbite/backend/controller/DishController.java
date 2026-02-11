@@ -34,10 +34,12 @@ public class DishController {
   }
 
   @GetMapping("/dishes")
-  public List<DishListItemResponse> listDishes() {
-    log.info("GET /api/dishes");
+  public List<DishListItemResponse> listDishes(@RequestParam(required = false) String q) {
+    log.info("GET /api/dishes q={}", q);
     long start = System.currentTimeMillis();
-    List<DishListItemResponse> dishes = dishService.listRecentDishes();
+    List<DishListItemResponse> dishes = (q != null && !q.isBlank())
+      ? dishService.searchDishes(q.trim())
+      : dishService.listRecentDishes();
     log.info("GET /api/dishes completed count={} duration={}ms", dishes.size(), System.currentTimeMillis() - start);
     return dishes;
   }
