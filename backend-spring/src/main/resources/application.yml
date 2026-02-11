@@ -26,3 +26,15 @@ app:
   web-origin: ${WEB_ORIGIN:http://localhost:3000}
   llm:
     base-url: ${LLM_BASE_URL:http://localhost:8000}
+
+# ── Logging ─────────────────────────────────────────────────
+logging:
+  level:
+    root: INFO
+    com.freshbite.backend: ${LOG_LEVEL:INFO}
+    com.freshbite.backend.controller: INFO
+    com.freshbite.backend.service: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

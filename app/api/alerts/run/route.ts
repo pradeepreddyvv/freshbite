@@ -2,18 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isValidTimeWindow, normalizeTimeWindow, parseTimeWindow } from '@/lib/time-window';
 import { calculateRiskLabel } from '@/lib/risk-label';
+import { withLogging } from '@/lib/logger';
 
 // POST /api/alerts/run
 // STUB for V2 alert evaluation
 // Called by GitHub Actions cron hourly
 
+const log = withLogging('/api/alerts/run');
+
 export async function POST(request: NextRequest) {
+  const ctx = log.start('POST', request.url);
   try {
     // Verify request is authorized (in production, use a secret token)
     const authHeader = request.headers.get('authorization');
     const expectedToken = process.env.ALERTS_SECRET_TOKEN || 'dev-token';
     
     if (authHeader !== `Bearer ${expectedToken}`) {
+      ctx.fail(401, 'Unauthorized — invalid or missing bearer token');
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -80,12 +85,13 @@ export async function POST(request: NextRequest) {
     }
 
     // STUB: In V2, this would actually send emails/SMS/push notifications
-    console.log('Alert evaluation results:', evaluationResults);
+    const alertsTriggered = evaluationResults.filter((r) => r.shouldAlert).length;
+    ctx.success(200, { evaluatedCount: subscriptions.length, alertsTriggered });
 
     return NextResponse.json({
       success: true,
       evaluatedCount: subscriptions.length,
-      alertsTriggered: evaluationResults.filter((r) => r.shouldAlert).length,
+      alertsTriggered,
       results: evaluationResults,
       metadata: {
         isStub: true,
@@ -93,7 +99,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error running alerts:', error);
+    ctx.error(error);
     return NextResponse.json(
       { error: 'Failed to run alerts' },
       { status: 500 }

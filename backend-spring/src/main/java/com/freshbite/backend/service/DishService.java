@@ -11,6 +11,8 @@ import com.freshbite.backend.dto.ReviewStats;
 import com.freshbite.backend.dto.TimeWindow;
 import com.freshbite.backend.repository.DishAtRestaurantRepository;
 import com.freshbite.backend.repository.ReviewRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -18,6 +20,7 @@ import java.util.List;
 
 @Service
 public class DishService {
+  private static final Logger log = LoggerFactory.getLogger(DishService.class);
   private final DishAtRestaurantRepository dishAtRestaurantRepository;
   private final ReviewRepository reviewRepository;
 
@@ -27,6 +30,7 @@ public class DishService {
   }
 
   public List<DishListItemResponse> listRecentDishes() {
+    log.debug("DishService.listRecentDishes");
     return dishAtRestaurantRepository.findTop10ByIsActiveTrueOrderByCreatedAtDesc()
       .stream()
       .map(this::toDishListItem)
@@ -34,6 +38,7 @@ public class DishService {
   }
 
   public DishSummaryResponse getSummary(String dishAtRestaurantId, TimeWindow window) {
+    log.debug("DishService.getSummary id={} window={}", dishAtRestaurantId, window.getValue());
     DishAtRestaurant dishAtRestaurant = dishAtRestaurantRepository.findById(dishAtRestaurantId)
       .orElseThrow();
 
@@ -61,6 +66,7 @@ public class DishService {
   }
 
   public ReviewListResponse getReviews(String dishAtRestaurantId, TimeWindow window) {
+    log.debug("DishService.getReviews id={} window={}", dishAtRestaurantId, window.getValue());
     DishAtRestaurant dishAtRestaurant = dishAtRestaurantRepository.findById(dishAtRestaurantId)
       .orElseThrow();
 
@@ -79,6 +85,7 @@ public class DishService {
   }
 
   public ReviewResponse createReview(String dishAtRestaurantId, CreateReviewRequest request) {
+      log.info("DishService.createReview id={} rating={}", dishAtRestaurantId, request.rating());
       DishAtRestaurant dishAtRestaurant = dishAtRestaurantRepository.findById(dishAtRestaurantId)
         .orElseThrow();
 
@@ -91,6 +98,7 @@ public class DishService {
       }
 
       Review saved = reviewRepository.save(review);
+      log.info("DishService.createReview completed reviewId={}", saved.getId());
       return toReviewResponse(saved);
     }
   private DishListItemResponse toDishListItem(DishAtRestaurant item) {

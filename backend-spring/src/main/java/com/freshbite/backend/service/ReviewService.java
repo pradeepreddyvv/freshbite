@@ -6,10 +6,13 @@ import com.freshbite.backend.dto.CreateReviewRequest;
 import com.freshbite.backend.dto.ReviewResponse;
 import com.freshbite.backend.repository.DishAtRestaurantRepository;
 import com.freshbite.backend.repository.ReviewRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ReviewService {
+  private static final Logger log = LoggerFactory.getLogger(ReviewService.class);
   private final DishAtRestaurantRepository dishAtRestaurantRepository;
   private final ReviewRepository reviewRepository;
 
@@ -19,6 +22,7 @@ public class ReviewService {
   }
 
   public ReviewResponse createReview(String dishAtRestaurantId, CreateReviewRequest request) {
+    log.info("ReviewService.createReview id={} rating={}", dishAtRestaurantId, request.rating());
     DishAtRestaurant dishAtRestaurant = dishAtRestaurantRepository.findById(dishAtRestaurantId)
       .orElseThrow();
 

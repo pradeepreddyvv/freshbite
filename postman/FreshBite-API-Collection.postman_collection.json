@@ -1,0 +1,785 @@
+{
+  "info": {
+    "name": "FreshBite — Complete API Collection",
+    "_postman_id": "freshbite-2026-02-10",
+    "description": "Complete API collection for FreshBite — Freshness-First Dish Review Platform.\n\nIncludes:\n• Next.js API routes (Prisma/Neon)\n• Spring Boot REST APIs\n• FastAPI LLM Service\n\nVariables:\n• {{nextjs_url}} — Next.js frontend (localhost:3000 or Vercel)\n• {{spring_url}} — Spring Boot API (localhost:8080 or DigitalOcean)\n• {{fastapi_url}} — FastAPI LLM service (localhost:8000)\n• {{dish_id}} — Sample DishAtRestaurant ID\n• {{restaurant_id}} — Sample Restaurant ID",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "nextjs_url", "value": "http://localhost:3000", "type": "string" },
+    { "key": "spring_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "fastapi_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "droplet_url", "value": "http://REDACTED_IP", "type": "string" },
+    { "key": "vercel_url", "value": "https://v0-freshbite.vercel.app", "type": "string" },
+    { "key": "dish_id", "value": "REPLACE_WITH_ACTUAL_ID", "type": "string" },
+    { "key": "restaurant_id", "value": "REPLACE_WITH_ACTUAL_ID", "type": "string" },
+    { "key": "alerts_token", "value": "dev-token", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "🔧 Setup — Get IDs",
+      "description": "Run these first to populate dish_id and restaurant_id variables",
+      "item": [
+        {
+          "name": "List All Dishes (get dish_id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.length > 0) {",
+                  "    pm.collectionVariables.set('dish_id', data[0].id);",
+                  "    console.log('Set dish_id =', data[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{spring_url}}/api/dishes", "host": ["{{spring_url}}"], "path": ["api", "dishes"] }
+          }
+        },
+        {
+          "name": "List All Restaurants (get restaurant_id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.length > 0) {",
+                  "    pm.collectionVariables.set('restaurant_id', data[0].id);",
+                  "    console.log('Set restaurant_id =', data[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{spring_url}}/api/restaurants", "host": ["{{spring_url}}"], "path": ["api", "restaurants"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🍽️ Spring Boot — Dishes",
+      "description": "Dish CRUD and review endpoints via Spring Boot (port 8080)",
+      "item": [
+        {
+          "name": "List All Dishes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{spring_url}}/api/dishes", "host": ["{{spring_url}}"], "path": ["api", "dishes"] }
+          }
+        },
+        {
+          "name": "Get Dish Summary (24h window)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/summary?window=24h",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "summary"],
+              "query": [{ "key": "window", "value": "24h", "description": "Options: 24h, 48h, 5d" }]
+            }
+          }
+        },
+        {
+          "name": "Get Dish Summary (48h window)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/summary?window=48h",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "summary"],
+              "query": [{ "key": "window", "value": "48h" }]
+            }
+          }
+        },
+        {
+          "name": "Get Dish Summary (5d window)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/summary?window=5d",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "summary"],
+              "query": [{ "key": "window", "value": "5d" }]
+            }
+          }
+        },
+        {
+          "name": "Get Dish Reviews (5d window)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews?window=5d",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"],
+              "query": [{ "key": "window", "value": "5d", "description": "Options: 24h, 48h, 5d" }]
+            }
+          }
+        },
+        {
+          "name": "Get Dish Reviews (24h window)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews?window=24h",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"],
+              "query": [{ "key": "window", "value": "24h" }]
+            }
+          }
+        },
+        {
+          "name": "Create Review (5 stars)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"text\": \"Absolutely amazing! The biryani was perfectly cooked with tender chicken.\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "Create Review (3 stars)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 3,\n  \"text\": \"Decent but the rice was a bit dry today. Flavor was okay.\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "Create Review (1 star — bad day)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 1,\n  \"text\": \"Terrible experience. Cold food, stale rice, and overly salty gravy.\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "Create Review (with visitedAt)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 4,\n  \"text\": \"Great lunch visit. Chicken was fresh and portions were generous.\",\n  \"visitedAt\": \"2026-02-09T12:30:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏪 Spring Boot — Restaurants",
+      "description": "Restaurant management and discovery endpoints",
+      "item": [
+        {
+          "name": "List All Restaurants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{spring_url}}/api/restaurants", "host": ["{{spring_url}}"], "path": ["api", "restaurants"] }
+          }
+        },
+        {
+          "name": "Create Restaurant",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Spice Garden\",\n  \"address\": \"123 Main St\",\n  \"city\": \"Tempe\",\n  \"state\": \"AZ\",\n  \"country\": \"USA\",\n  \"latitude\": 33.4255,\n  \"longitude\": -111.9400\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/restaurants",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "restaurants"]
+            }
+          }
+        },
+        {
+          "name": "Search Restaurants (by name)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/restaurants/search?q=biryani",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "restaurants", "search"],
+              "query": [
+                { "key": "q", "value": "biryani", "description": "Search text (name/city)" },
+                { "key": "lat", "value": "", "description": "Latitude (optional, for proximity)", "disabled": true },
+                { "key": "lng", "value": "", "description": "Longitude (optional, for proximity)", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Restaurants (by GPS proximity)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/restaurants/search?lat=33.4255&lng=-111.9400",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "restaurants", "search"],
+              "query": [
+                { "key": "lat", "value": "33.4255" },
+                { "key": "lng", "value": "-111.9400" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Dishes at Restaurant",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/restaurants/{{restaurant_id}}/dishes",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "restaurants", "{{restaurant_id}}", "dishes"]
+            }
+          }
+        },
+        {
+          "name": "Add Dish to Restaurant",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishName\": \"Chicken Biryani\",\n  \"cuisine\": \"Indian\",\n  \"description\": \"Fragrant basmati rice with tender chicken and aromatic spices\",\n  \"price\": 14.99\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/restaurants/{{restaurant_id}}/dishes",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "restaurants", "{{restaurant_id}}", "dishes"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🗺️ Spring Boot — Discover",
+      "description": "GPS-based restaurant discovery (Overpass/OSM + FreshBite DB)",
+      "item": [
+        {
+          "name": "Discover by GPS (Tempe, AZ)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/discover?lat=33.4255&lng=-111.9400&radius=5000",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "discover"],
+              "query": [
+                { "key": "lat", "value": "33.4255" },
+                { "key": "lng", "value": "-111.9400" },
+                { "key": "radius", "value": "5000", "description": "Meters (default 5000, max 50000)" },
+                { "key": "limit", "value": "50", "description": "Max results (default 100, max 200)", "disabled": true },
+                { "key": "name", "value": "", "description": "Filter by restaurant name", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Discover by GPS (San Francisco)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/discover?lat=37.7749&lng=-122.4194&radius=3000",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "discover"],
+              "query": [
+                { "key": "lat", "value": "37.7749" },
+                { "key": "lng", "value": "-122.4194" },
+                { "key": "radius", "value": "3000" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Discover by City Name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/discover?city=Tempe&radius=5000",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "discover"],
+              "query": [
+                { "key": "city", "value": "Tempe" },
+                { "key": "radius", "value": "5000" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Discover by GPS + Name Filter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/discover?lat=33.4255&lng=-111.9400&radius=5000&name=pizza",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "discover"],
+              "query": [
+                { "key": "lat", "value": "33.4255" },
+                { "key": "lng", "value": "-111.9400" },
+                { "key": "radius", "value": "5000" },
+                { "key": "name", "value": "pizza" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🤖 Spring Boot — Chat (→ FastAPI)",
+      "description": "Chat endpoint proxies to FastAPI LLM service",
+      "item": [
+        {
+          "name": "Ask about dish quality",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishAtRestaurantId\": \"{{dish_id}}\",\n  \"question\": \"How is the food today?\",\n  \"window\": \"24h\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/chat",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Ask about specific aspect",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishAtRestaurantId\": \"{{dish_id}}\",\n  \"question\": \"Is the chicken tender or dry?\",\n  \"window\": \"5d\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/chat",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Ask for recommendation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishAtRestaurantId\": \"{{dish_id}}\",\n  \"question\": \"Should I order this dish today?\",\n  \"window\": \"24h\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/chat",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "chat"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🐍 FastAPI — LLM Service (Direct)",
+      "description": "Direct calls to FastAPI LLM service on port 8000 (usually internal)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{fastapi_url}}/", "host": ["{{fastapi_url}}"], "path": [""] }
+          }
+        },
+        {
+          "name": "Analyze Reviews (direct)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishAtRestaurantId\": \"{{dish_id}}\",\n  \"question\": \"How is the food quality?\",\n  \"window\": \"24h\",\n  \"dishName\": \"Chicken Biryani\",\n  \"reviews\": [\n    { \"id\": \"r1\", \"rating\": 5, \"text\": \"Amazing! Perfectly cooked.\", \"createdAt\": \"2026-02-10T10:00:00Z\" },\n    { \"id\": \"r2\", \"rating\": 4, \"text\": \"Good but slightly salty.\", \"createdAt\": \"2026-02-10T09:00:00Z\" },\n    { \"id\": \"r3\", \"rating\": 2, \"text\": \"Rice was cold and dry.\", \"createdAt\": \"2026-02-10T08:00:00Z\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{fastapi_url}}/api/chat",
+              "host": ["{{fastapi_url}}"],
+              "path": ["api", "chat"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📡 Next.js API Routes (Prisma)",
+      "description": "Next.js API routes that query Neon PostgreSQL via Prisma",
+      "item": [
+        {
+          "name": "Get Dish Summary (via Next.js)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{nextjs_url}}/api/dish/{{dish_id}}/summary?window=24h",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "summary"],
+              "query": [{ "key": "window", "value": "24h" }]
+            }
+          }
+        },
+        {
+          "name": "Get Dish Reviews (via Next.js)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{nextjs_url}}/api/dish/{{dish_id}}/reviews?window=5d",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"],
+              "query": [{ "key": "window", "value": "5d" }]
+            }
+          }
+        },
+        {
+          "name": "Create Review (via Next.js)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 4,\n  \"text\": \"Good food, nice portions!\"\n}"
+            },
+            "url": {
+              "raw": "{{nextjs_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "Chat Stub (via Next.js)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishAtRestaurantId\": \"{{dish_id}}\",\n  \"question\": \"How is it today?\",\n  \"window\": \"24h\"\n}"
+            },
+            "url": {
+              "raw": "{{nextjs_url}}/api/chat",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Run Alerts (via Next.js)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alerts_token}}" }
+            ],
+            "url": {
+              "raw": "{{nextjs_url}}/api/alerts/run",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "alerts", "run"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🌐 Production — DigitalOcean (via Nginx)",
+      "description": "Hit the live droplet (nginx reverse proxy on port 80)",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{droplet_url}}/health", "host": ["{{droplet_url}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "List Dishes (Production)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{droplet_url}}/api/dishes", "host": ["{{droplet_url}}"], "path": ["api", "dishes"] }
+          }
+        },
+        {
+          "name": "List Restaurants (Production)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{droplet_url}}/api/restaurants", "host": ["{{droplet_url}}"], "path": ["api", "restaurants"] }
+          }
+        },
+        {
+          "name": "Discover Nearby (Production — Tempe)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{droplet_url}}/api/discover?lat=33.4255&lng=-111.9400&radius=5000",
+              "host": ["{{droplet_url}}"],
+              "path": ["api", "discover"],
+              "query": [
+                { "key": "lat", "value": "33.4255" },
+                { "key": "lng", "value": "-111.9400" },
+                { "key": "radius", "value": "5000" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Dish Summary (Production)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{droplet_url}}/api/dish/{{dish_id}}/summary?window=24h",
+              "host": ["{{droplet_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "summary"],
+              "query": [{ "key": "window", "value": "24h" }]
+            }
+          }
+        },
+        {
+          "name": "Create Review (Production)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"text\": \"Production test review — fantastic!\"\n}"
+            },
+            "url": {
+              "raw": "{{droplet_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{droplet_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🟣 Production — Vercel (Frontend Proxy)",
+      "description": "Hit the Vercel frontend — API calls go through server-side rewrites to droplet",
+      "item": [
+        {
+          "name": "Homepage",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{vercel_url}}/", "host": ["{{vercel_url}}"], "path": [""] }
+          }
+        },
+        {
+          "name": "Get Dish Summary (via Vercel rewrite)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{vercel_url}}/api/dish/{{dish_id}}/summary?window=24h",
+              "host": ["{{vercel_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "summary"],
+              "query": [{ "key": "window", "value": "24h" }]
+            }
+          }
+        },
+        {
+          "name": "Get Dishes (via Vercel rewrite)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{vercel_url}}/api/dishes",
+              "host": ["{{vercel_url}}"],
+              "path": ["api", "dishes"]
+            }
+          }
+        },
+        {
+          "name": "Discover Nearby (via Vercel rewrite)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{vercel_url}}/api/discover?lat=33.4255&lng=-111.9400&radius=5000",
+              "host": ["{{vercel_url}}"],
+              "path": ["api", "discover"],
+              "query": [
+                { "key": "lat", "value": "33.4255" },
+                { "key": "lng", "value": "-111.9400" },
+                { "key": "radius", "value": "5000" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "❌ Error Cases",
+      "description": "Test validation and error handling",
+      "item": [
+        {
+          "name": "Invalid window parameter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews?window=99d",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"],
+              "query": [{ "key": "window", "value": "99d" }]
+            }
+          }
+        },
+        {
+          "name": "Non-existent dish ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{spring_url}}/api/dish/nonexistent-id-12345/summary?window=24h",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "nonexistent-id-12345", "summary"],
+              "query": [{ "key": "window", "value": "24h" }]
+            }
+          }
+        },
+        {
+          "name": "Create Review — missing rating",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Missing rating field\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "Create Review — rating out of range",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 10,\n  \"text\": \"Rating should be 1-5\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "Create Review — empty text",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"text\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/dish/{{dish_id}}/reviews",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "dish", "{{dish_id}}", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "Alerts — missing auth token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{nextjs_url}}/api/alerts/run",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "alerts", "run"]
+            }
+          }
+        },
+        {
+          "name": "Chat — empty question",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishAtRestaurantId\": \"{{dish_id}}\",\n  \"question\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{spring_url}}/api/chat",
+              "host": ["{{spring_url}}"],
+              "path": ["api", "chat"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

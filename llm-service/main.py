@@ -1,7 +1,36 @@
-from fastapi import FastAPI
+import logging
+import time
+import uuid
+
+from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 
+# ── Logging Setup ───────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("freshbite.llm")
+
 app = FastAPI(title="FreshBite LLM Service")
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests with timing."""
+    request_id = str(uuid.uuid4())[:8]
+    start = time.time()
+    logger.info("[%s] %s %s", request_id, request.method, request.url.path)
+    response = await call_next(request)
+    duration_ms = round((time.time() - start) * 1000)
+    logger.info("[%s] %s %s → %d (%dms)", request_id, request.method, request.url.path, response.status_code, duration_ms)
+    return response
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "freshbite-llm"}
 
 
 class ReviewData(BaseModel):
@@ -161,4 +190,22 @@ def analyze_reviews(question: str, reviews: list[ReviewData], dish_name: str, wi
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
-    return analyze_reviews(request.question, request.reviews, request.dishName, request.window)
+    logger.info(
+        "POST /chat dishId=%s question=\"%s\" window=%s reviewCount=%d dishName=\"%s\"",
+        request.dishAtRestaurantId,
+        request.question[:50] + "..." if len(request.question) > 50 else request.question,
+        request.window,
+        len(request.reviews),
+        request.dishName,
+    )
+    start = time.time()
+    response = analyze_reviews(request.question, request.reviews, request.dishName, request.window)
+    duration_ms = round((time.time() - start) * 1000)
+    logger.info(
+        "POST /chat completed reviewIdsUsed=%d keywordsMatched=%s avgRating=%s duration=%dms",
+        len(response.reviewIdsUsed),
+        response.metadata.get("keywordsMatched", []),
+        response.metadata.get("avgRating"),
+        duration_ms,
+    )
+    return response

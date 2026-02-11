@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { withLogging } from '@/lib/logger';
 
 // POST /api/chat
-// STUB for V2 evidence-based chat
-// Contract: must return answer + reviewIdsUsed for citation
+// Proxies to Spring Boot ChatController → FastAPI LLM service
+// Flow: Frontend → Next.js → Spring Boot → FastAPI → response
+
+const log = withLogging('/api/chat');
 
 const chatRequestSchema = z.object({
   dishAtRestaurantId: z.string(),
@@ -12,12 +15,14 @@ const chatRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const ctx = log.start('POST', request.url);
   try {
     const body = await request.json();
 
     // Validate input
     const validationResult = chatRequestSchema.safeParse(body);
     if (!validationResult.success) {
+      ctx.fail(400, 'Validation failed', { errors: validationResult.error.errors });
       return NextResponse.json(
         { error: 'Invalid input', details: validationResult.error.errors },
         { status: 400 }
@@ -26,25 +31,30 @@ export async function POST(request: NextRequest) {
 
     const { dishAtRestaurantId, question, window } = validationResult.data;
 
-    // STUB IMPLEMENTATION
-    // V2: This would:
-    // 1. Fetch reviews within the time window
-    // 2. Use embeddings/LLM to find relevant reviews
-    // 3. Generate answer based ONLY on those reviews
-    // 4. Return reviewIds for citation links
+    // Proxy to Spring Boot ChatController which fetches reviews + calls FastAPI
+    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+    
+    ctx.success(200, { dishId: dishAtRestaurantId, window, questionLength: question.length, backendUrl });
 
-    // For now, return a placeholder response
-    return NextResponse.json({
-      answer: `This is a placeholder response for your question: "${question}". In V2, this will analyze only the last ${window} of reviews for dish ${dishAtRestaurantId} and provide evidence-based answers with citations.`,
-      reviewIdsUsed: [], // V2: will include actual review IDs
-      window,
-      metadata: {
-        isStub: true,
-        message: 'Chat feature coming in V2 - will use RAG over time-windowed reviews',
-      },
+    const springResponse = await fetch(`${backendUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dishAtRestaurantId, question, window }),
     });
+
+    if (!springResponse.ok) {
+      const errorText = await springResponse.text();
+      ctx.fail(springResponse.status, 'Spring Boot chat failed', { error: errorText });
+      return NextResponse.json(
+        { error: 'Chat service error', details: errorText },
+        { status: springResponse.status }
+      );
+    }
+
+    const data = await springResponse.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error processing chat request:', error);
+    ctx.error(error);
     return NextResponse.json(
       { error: 'Failed to process chat request' },
       { status: 500 }

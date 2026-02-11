@@ -12,6 +12,8 @@ import com.freshbite.backend.repository.DishAtRestaurantRepository;
 import com.freshbite.backend.repository.DishRepository;
 import com.freshbite.backend.repository.RestaurantRepository;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +32,7 @@ import java.sql.Timestamp;
 @RestController
 @RequestMapping("/api")
 public class RestaurantController {
+  private static final Logger log = LoggerFactory.getLogger(RestaurantController.class);
   private final RestaurantRepository restaurantRepository;
   private final DishRepository dishRepository;
   private final DishAtRestaurantRepository dishAtRestaurantRepository;
@@ -48,15 +51,20 @@ public class RestaurantController {
 
   @GetMapping("/restaurants")
   public List<RestaurantResponse> listRestaurants() {
-    return restaurantRepository.findAllByOrderByCreatedAtDesc()
+    log.info("GET /api/restaurants");
+    long start = System.currentTimeMillis();
+    List<RestaurantResponse> results = restaurantRepository.findAllByOrderByCreatedAtDesc()
       .stream()
       .map(this::toRestaurantResponse)
       .toList();
+    log.info("GET /api/restaurants completed count={} duration={}ms", results.size(), System.currentTimeMillis() - start);
+    return results;
   }
 
   @PostMapping("/restaurants")
   @ResponseStatus(HttpStatus.CREATED)
   public RestaurantResponse createRestaurant(@Valid @RequestBody CreateRestaurantRequest request) {
+    log.info("POST /api/restaurants name={} city={}", request.name(), request.city());
     Restaurant restaurant = new Restaurant();
     restaurant.setId(generateCuid());
     restaurant.setName(request.name());
@@ -69,6 +77,7 @@ public class RestaurantController {
     if (request.longitude() != null) restaurant.setLongitude(request.longitude());
 
     Restaurant saved = restaurantRepository.save(restaurant);
+    log.info("POST /api/restaurants completed id={}", saved.getId());
     return toRestaurantResponse(saved);
   }
 
@@ -80,6 +89,8 @@ public class RestaurantController {
     @RequestParam(required = false) Double lat,
     @RequestParam(required = false) Double lng
   ) {
+    log.info("GET /api/restaurants/search q={} lat={} lng={}", q, lat, lng);
+    long start = System.currentTimeMillis();
     if (lat != null && lng != null) {
       // Proximity search with Haversine distance
       return restaurantRepository.searchNearby(q, lat, lng).stream()
@@ -120,6 +131,7 @@ public class RestaurantController {
 
   @GetMapping("/restaurants/{restaurantId}/dishes")
   public List<DishAtRestaurantResponse> listDishesAtRestaurant(@PathVariable String restaurantId) {
+    log.info("GET /api/restaurants/{}/dishes", restaurantId);
     Restaurant restaurant = restaurantRepository.findById(restaurantId)
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found"));
 
@@ -134,6 +146,7 @@ public class RestaurantController {
     @PathVariable String restaurantId,
     @Valid @RequestBody CreateDishAtRestaurantRequest request
   ) {
+    log.info("POST /api/restaurants/{}/dishes dishName={}", restaurantId, request.dishName());
     Restaurant restaurant = restaurantRepository.findById(restaurantId)
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found"));
 
@@ -157,6 +170,7 @@ public class RestaurantController {
     dar.setActive(true);
 
     DishAtRestaurant saved = dishAtRestaurantRepository.save(dar);
+    log.info("POST /api/restaurants/{}/dishes completed darId={}", restaurantId, saved.getId());
     return toDishAtRestaurantResponse(saved);
   }
 
