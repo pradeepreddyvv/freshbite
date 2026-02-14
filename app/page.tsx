@@ -3,222 +3,384 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 
-/* ── Types ────────────────────────────────────────────── */
-
-interface NearbyRestaurant {
-  osmId: number;
+/* ── types ── */
+interface RestaurantResult {
+  id: string;
   name: string;
-  cuisine?: string | null;
-  address?: string | null;
-  city?: string | null;
-  type?: string;
-  latitude: number;
-  longitude: number;
-  distanceKm?: number | null;
-  source?: string;
-  freshbiteId?: string | null;
+  city: string | null;
+  address: string | null;
+  state: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  similarity: number;
+  dishCount: number;
 }
 
-interface DiscoverResponse {
-  resolvedLocation?: string;
-  totalResults: number;
-  restaurants: NearbyRestaurant[];
+interface LocationResult {
+  id: string;
+  name: string;
+  city: string | null;
+  address: string | null;
+  state: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  similarity: number;
+  matchedField: 'city' | 'address' | 'state';
+  dishCount: number;
 }
 
-interface DishListItem {
+interface DishResult {
   id: string;
   dishName: string;
-  cuisine?: string | null;
-  description?: string | null;
+  cuisine: string | null;
+  description: string | null;
+  restaurantId: string;
   restaurantName: string;
-  city: string;
+  city: string | null;
+  similarity: number;
   reviewCount: number;
 }
 
-/* ── Component ────────────────────────────────────────── */
-
+/* ── component ── */
 export default function HomePage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [locationStatus, setLocationStatus] = useState<'detecting' | 'granted' | 'denied' | 'error'>('detecting');
-  const [nearbyRestaurants, setNearbyRestaurants] = useState<NearbyRestaurant[]>([]);
-  const [dishes, setDishes] = useState<DishListItem[]>([]);
-  const [locationName, setLocationName] = useState('');
-  const [nearbyLoading, setNearbyLoading] = useState(true);
-  const [dishesLoading, setDishesLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  /* ── independent search state for each field ── */
+  const [restaurantQuery, setRestaurantQuery] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
+  const [dishQuery, setDishQuery] = useState('');
 
-  /* ── Fetch dishes (initial + search) ─────────────────── */
-  const fetchDishes = useCallback(async (query?: string) => {
-    setDishesLoading(true);
-    try {
-      const url = query ? `/api/dishes?q=${encodeURIComponent(query)}` : `/api/dishes`;
-      const res = await fetch(url);
-      if (res.ok) setDishes(await res.json());
-      else setDishes([]);
-    } catch {
-      setDishes([]);
-    } finally {
-      setDishesLoading(false);
+  const [restaurantResults, setRestaurantResults] = useState<RestaurantResult[]>([]);
+  const [locationResults, setLocationResults] = useState<LocationResult[]>([]);
+  const [dishResults, setDishResults] = useState<DishResult[]>([]);
+
+  const [restaurantLoading, setRestaurantLoading] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [dishLoading, setDishLoading] = useState(false);
+
+  const [initialLoaded, setInitialLoaded] = useState(false);
+
+  /* debounce refs (one per field) */
+  const rTimer = useRef<NodeJS.Timeout | null>(null);
+  const lTimer = useRef<NodeJS.Timeout | null>(null);
+  const dTimer = useRef<NodeJS.Timeout | null>(null);
+
+  /* ── 3 independent search functions ── */
+  const searchRestaurants = useCallback(async (q: string) => {
+    if (!q || q.length < 2) {
+      setRestaurantResults([]);
+      return;
     }
-  }, []);
-
-  /* ── Fetch nearby restaurants ────────────────────────── */
-  const fetchNearby = useCallback(async (
-    loc: { lat: number; lng: number } | null,
-    locationText?: string,
-    nameFilter?: string
-  ) => {
-    setNearbyLoading(true);
+    setRestaurantLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (loc && !locationText) {
-        params.set('lat', loc.lat.toString());
-        params.set('lng', loc.lng.toString());
-      }
-      if (locationText) params.set('location', locationText);
-      if (nameFilter) params.set('name', nameFilter);
-      params.set('radius', '5000');
-      params.set('limit', '50');
-
-      const res = await fetch(`/api/discover?${params.toString()}`);
+      const res = await fetch(`/api/search/restaurants?q=${encodeURIComponent(q)}`);
       if (res.ok) {
-        const data: DiscoverResponse = await res.json();
-        setNearbyRestaurants(data.restaurants);
-        if (data.resolvedLocation) setLocationName(data.resolvedLocation);
+        const data = await res.json();
+        setRestaurantResults(data.results ?? []);
       }
-    } catch (err) {
-      console.error('Failed to fetch nearby restaurants:', err);
+    } catch {
+      /* network error – leave results as-is */
     } finally {
-      setNearbyLoading(false);
+      setRestaurantLoading(false);
     }
   }, []);
 
-  /* ── Initial load: GPS + all dishes ──────────────────── */
-  useEffect(() => {
-    fetchDishes();
-  }, [fetchDishes]);
-
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setLocationStatus('error');
-      setNearbyLoading(false);
+  const searchLocations = useCallback(async (q: string) => {
+    if (!q || q.length < 2) {
+      setLocationResults([]);
       return;
     }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
-        setUserLocation(loc);
-        setLocationStatus('granted');
-        fetchNearby(loc);
-      },
-      () => {
-        setLocationStatus('denied');
-        setNearbyLoading(false);
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-    );
-  }, [fetchNearby]);
-
-  /* ── Unified search handler ──────────────────────────── */
-  const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-
-    searchTimeoutRef.current = setTimeout(() => {
-      setSearching(true);
-      const trimmed = query.trim();
-
-      if (!trimmed) {
-        // Empty search → reset to defaults
-        fetchDishes();
-        if (userLocation) fetchNearby(userLocation);
-        else {
-          setNearbyRestaurants([]);
-          setNearbyLoading(false);
-        }
-        setSearching(false);
-        return;
+    setLocationLoading(true);
+    try {
+      const res = await fetch(`/api/search/locations?q=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLocationResults(data.results ?? []);
       }
+    } catch {
+      /* network error */
+    } finally {
+      setLocationLoading(false);
+    }
+  }, []);
 
-      // Search both restaurants and dishes in parallel
-      Promise.all([
-        fetchNearby(userLocation, trimmed, trimmed),
-        fetchDishes(trimmed),
-      ]).finally(() => setSearching(false));
-    }, 400);
-  }, [fetchDishes, fetchNearby, userLocation]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    setSearching(true);
-    const trimmed = searchQuery.trim();
-    if (!trimmed) {
-      fetchDishes();
-      if (userLocation) fetchNearby(userLocation);
-      setSearching(false);
+  const searchDishes = useCallback(async (q: string) => {
+    if (!q || q.length < 2) {
+      setDishResults([]);
       return;
     }
-    Promise.all([
-      fetchNearby(userLocation, trimmed, trimmed),
-      fetchDishes(trimmed),
-    ]).finally(() => setSearching(false));
-  };
-
-  const typeEmoji = (type?: string) => {
-    switch (type) {
-      case 'fast_food': return '🍔';
-      case 'cafe': return '☕';
-      default: return '🍽️';
+    setDishLoading(true);
+    try {
+      const res = await fetch(`/api/search/dishes?q=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDishResults(data.results ?? []);
+      }
+    } catch {
+      /* network error */
+    } finally {
+      setDishLoading(false);
     }
+  }, []);
+
+  /* ── initial load (all restaurants + dishes) ── */
+  useEffect(() => {
+    (async () => {
+      try {
+        const [rr, dr] = await Promise.all([
+          fetch('/api/restaurants'),
+          fetch('/api/dishes'),
+        ]);
+
+        if (rr.ok) {
+          const arr = await rr.json();
+          setRestaurantResults(
+            arr.slice(0, 30).map((r: Record<string, unknown>) => ({
+              id: r.id,
+              name: r.name,
+              city: (r.city as string) ?? null,
+              address: (r.address as string) ?? null,
+              state: (r.state as string) ?? null,
+              latitude: (r.latitude as number) ?? null,
+              longitude: (r.longitude as number) ?? null,
+              similarity: 1,
+              dishCount: 0,
+            })),
+          );
+        }
+
+        if (dr.ok) {
+          const arr = await dr.json();
+          setDishResults(
+            arr.slice(0, 20).map((d: Record<string, unknown>) => ({
+              id: d.id,
+              dishName: d.dishName,
+              cuisine: (d.cuisine as string) ?? null,
+              description: (d.description as string) ?? null,
+              restaurantId: '',
+              restaurantName: (d.restaurantName as string) ?? '',
+              city: (d.city as string) ?? null,
+              similarity: 1,
+              reviewCount:
+                typeof d.reviewCount === 'number' ? d.reviewCount : 0,
+            })),
+          );
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setInitialLoaded(true);
+      }
+    })();
+  }, []);
+
+  /* ── debounced input handlers (each field independent) ── */
+  const onRestaurantInput = (v: string) => {
+    setRestaurantQuery(v);
+    if (rTimer.current) clearTimeout(rTimer.current);
+    rTimer.current = setTimeout(() => searchRestaurants(v), 350);
   };
 
+  const onLocationInput = (v: string) => {
+    setLocationQuery(v);
+    if (lTimer.current) clearTimeout(lTimer.current);
+    lTimer.current = setTimeout(() => searchLocations(v), 350);
+  };
+
+  const onDishInput = (v: string) => {
+    setDishQuery(v);
+    if (dTimer.current) clearTimeout(dTimer.current);
+    dTimer.current = setTimeout(() => searchDishes(v), 350);
+  };
+
+  /* ── clear helpers ── */
+  const clearR = () => {
+    setRestaurantQuery('');
+    setRestaurantResults([]);
+  };
+  const clearL = () => {
+    setLocationQuery('');
+    setLocationResults([]);
+  };
+  const clearD = () => {
+    setDishQuery('');
+    setDishResults([]);
+  };
+
+  const anyActive = restaurantQuery || locationQuery || dishQuery;
+
+  /* ── merge restaurant + location results (de-dup by id) ── */
+  const merged = (() => {
+    const seen = new Set<string>();
+    const out: Array<RestaurantResult & { matchSource: string }> = [];
+
+    for (const r of restaurantResults) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        out.push({
+          ...r,
+          matchSource: restaurantQuery ? 'Name match' : '',
+        });
+      }
+    }
+
+    for (const r of locationResults) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        out.push({
+          ...r,
+          matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}`,
+        });
+      } else {
+        const existing = out.find((m) => m.id === r.id);
+        if (existing && !existing.matchSource.includes('📍')) {
+          existing.matchSource += ` · 📍 ${r.matchedField}`;
+        }
+      }
+    }
+
+    return out;
+  })();
+
+  /* ── render ── */
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
-      {/* ── Hero + Search ──────────────────────────────── */}
+      {/* ── header + 3 search inputs ── */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-6xl mx-auto px-4 py-10 text-center">
+        <div className="max-w-6xl mx-auto px-4 py-8 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
             🍽️ FreshBite
           </h1>
           <p className="text-lg text-gray-600 mb-6">
-            Dish reviews that matter — see only what&apos;s fresh
+            Dish reviews that matter &mdash; see only what&apos;s fresh
           </p>
 
-          {/* ── Unified Search Bar ────────────────────── */}
-          <form onSubmit={handleSearchSubmit} className="max-w-2xl mx-auto">
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">🔍</span>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Search by restaurant, dish, address, city, or pincode..."
-                className="w-full pl-12 pr-28 py-4 rounded-xl border-2 border-gray-200 focus:border-green-500 focus:ring-4 focus:ring-green-100 text-gray-900 outline-none text-base shadow-sm"
-              />
-              <button
-                type="submit"
-                disabled={searching}
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors text-sm"
-              >
-                {searching ? 'Searching...' : 'Search'}
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-2">
-              Try: &quot;pizza&quot;, &quot;Phoenix&quot;, &quot;McDonald&apos;s&quot;, &quot;85281&quot;, or &quot;Italian&quot;
-            </p>
-          </form>
+          {/* 3 independent search boxes */}
+          <div className="max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Restaurant name search */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 text-left">
+                  🏪 Restaurant
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={restaurantQuery}
+                    onChange={(e) => onRestaurantInput(e.target.value)}
+                    placeholder="e.g. McDonald's, Pizza Hut..."
+                    className="w-full px-3 py-3 pr-8 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-100 text-gray-900 outline-none text-sm"
+                  />
+                  {restaurantQuery && (
+                    <button
+                      onClick={clearR}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  {restaurantLoading && (
+                    <span className="absolute right-8 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
+              </div>
 
-          {/* Quick links */}
+              {/* Location search */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 text-left">
+                  📍 Location
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={locationQuery}
+                    onChange={(e) => onLocationInput(e.target.value)}
+                    placeholder="City, address, zip, state..."
+                    className="w-full px-3 py-3 pr-8 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-gray-900 outline-none text-sm"
+                  />
+                  {locationQuery && (
+                    <button
+                      onClick={clearL}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  {locationLoading && (
+                    <span className="absolute right-8 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
+              </div>
+
+              {/* Dish search */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 text-left">
+                  🍴 Dish
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={dishQuery}
+                    onChange={(e) => onDishInput(e.target.value)}
+                    placeholder="Biryani, burger, pizza..."
+                    className="w-full px-3 py-3 pr-8 rounded-lg border-2 border-gray-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 text-gray-900 outline-none text-sm"
+                  />
+                  {dishQuery && (
+                    <button
+                      onClick={clearD}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  {dishLoading && (
+                    <span className="absolute right-8 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Active search chips */}
+            {anyActive && (
+              <div className="mt-3 flex items-center gap-2 flex-wrap justify-center">
+                {restaurantQuery && (
+                  <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs font-medium px-2.5 py-1 rounded-full border border-green-200">
+                    🏪 {restaurantQuery}
+                    <button onClick={clearR} className="hover:text-green-900">
+                      ✕
+                    </button>
+                  </span>
+                )}
+                {locationQuery && (
+                  <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full border border-blue-200">
+                    📍 {locationQuery}
+                    <button onClick={clearL} className="hover:text-blue-900">
+                      ✕
+                    </button>
+                  </span>
+                )}
+                {dishQuery && (
+                  <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-700 text-xs font-medium px-2.5 py-1 rounded-full border border-orange-200">
+                    🍴 {dishQuery}
+                    <button onClick={clearD} className="hover:text-orange-900">
+                      ✕
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
+
+            <p className="text-[11px] text-gray-400 mt-2">
+              Powered by fuzzy search &mdash; typos like &quot;piza&quot; or
+              &quot;paradse&quot; still work ✨
+            </p>
+          </div>
+
+          {/* Nav links */}
           <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
             <Link
               href="/discover"
               className="inline-flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm border border-green-200"
             >
-              🗺️ Map View
+              🗺️ Discover Near Me
             </Link>
             <Link
               href="/restaurant/add"
@@ -226,17 +388,11 @@ export default function HomePage() {
             >
               + Add Restaurant
             </Link>
-            {locationStatus === 'granted' && (
-              <span className="text-xs text-green-600 flex items-center gap-1">
-                <span className="w-2 h-2 bg-green-500 rounded-full inline-block" />
-                GPS active{locationName ? ` · ${locationName}` : ''}
-              </span>
-            )}
           </div>
         </div>
       </div>
 
-      {/* ── Value Propositions (compact) ───────────────── */}
+      {/* ── feature highlights ── */}
       <div className="max-w-6xl mx-auto px-4 pt-8 pb-4">
         <div className="grid grid-cols-3 gap-6">
           <div className="text-center">
@@ -246,7 +402,9 @@ export default function HomePage() {
           </div>
           <div className="text-center">
             <span className="text-2xl">🎯</span>
-            <p className="text-sm font-medium text-gray-700 mt-1">Dish-Specific</p>
+            <p className="text-sm font-medium text-gray-700 mt-1">
+              Dish-Specific
+            </p>
             <p className="text-xs text-gray-500">Rate dishes, not restaurants</p>
           </div>
           <div className="text-center">
@@ -257,144 +415,146 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Two-Column Layout ──────────────────────────── */}
+      {/* ── results: restaurants (left) + dishes (right) ── */}
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-          {/* ── Left Column: Nearby Restaurants ────────── */}
+          {/* ── LEFT: merged restaurant + location results ── */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                📍 Nearby Restaurants
-                {locationName && !searchQuery && (
-                  <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                    {locationName}
-                  </span>
-                )}
+                🏪 Restaurants{' '}
+                <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                  {merged.length}
+                </span>
               </h2>
-              <Link href="/discover" className="text-xs text-green-600 hover:underline font-medium">
-                View on map →
+              <Link
+                href="/discover"
+                className="text-xs text-green-600 hover:underline font-medium"
+              >
+                Map view →
               </Link>
             </div>
 
-            {nearbyLoading ? (
+            {!initialLoaded ? (
               <div className="space-y-3">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse"
+                  >
                     <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
                     <div className="h-3 bg-gray-100 rounded w-1/2" />
                   </div>
                 ))}
               </div>
-            ) : locationStatus === 'denied' && !searchQuery ? (
+            ) : merged.length === 0 ? (
               <div className="text-center py-10 bg-white rounded-lg border border-gray-200">
-                <div className="text-3xl mb-2">📍</div>
-                <p className="text-gray-500 text-sm mb-1">Location access denied</p>
-                <p className="text-xs text-gray-400">Search by address or pincode above, or</p>
-                <Link href="/discover" className="text-xs text-green-600 hover:underline">
-                  go to Discover →
-                </Link>
-              </div>
-            ) : nearbyRestaurants.length === 0 ? (
-              <div className="text-center py-10 bg-white rounded-lg border border-gray-200">
-                <div className="text-3xl mb-2">🌍</div>
+                <div className="text-3xl mb-2">🏪</div>
                 <p className="text-gray-500 text-sm">
-                  {searchQuery
-                    ? `No restaurants found for "${searchQuery}"`
-                    : 'No restaurants found nearby'}
+                  {anyActive
+                    ? 'No restaurants match your search'
+                    : 'No restaurants yet'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Try searching by city, address, or pincode
+                  Try a different name or location, or{' '}
+                  <Link
+                    href="/restaurant/add"
+                    className="text-green-600 hover:underline"
+                  >
+                    add one
+                  </Link>
                 </p>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-                {nearbyRestaurants.map((r, idx) => {
-                  const linkHref = r.freshbiteId ? `/restaurant/${r.freshbiteId}` : `/discover`;
-                  return (
-                    <Link
-                      key={`${r.osmId}-${idx}`}
-                      href={linkHref}
-                      className="block bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-green-300 transition-all"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-gray-900 truncate text-sm">
-                              {typeEmoji(r.type)} {r.name}
-                            </h3>
-                            {r.source === 'freshbite' && (
-                              <span className="shrink-0 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
-                                FreshBite
-                              </span>
-                            )}
-                          </div>
-                          {(r.address || r.city) && (
-                            <p className="text-xs text-gray-500 mt-0.5 truncate">
-                              {r.address}{r.address && r.city ? ', ' : ''}{r.city || ''}
-                            </p>
-                          )}
-                          {r.cuisine && (
-                            <p className="text-[11px] text-gray-400 mt-0.5">🍴 {r.cuisine}</p>
-                          )}
-                        </div>
-                        <div className="shrink-0 flex flex-col items-end gap-1 ml-3">
-                          {r.distanceKm != null && (
-                            <span className="text-[11px] font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                              {r.distanceKm < 1
-                                ? `${Math.round(r.distanceKm * 1000)} m`
-                                : `${r.distanceKm.toFixed(1)} km`}
+                {merged.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/restaurant/${r.id}`}
+                    className="block bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-green-300 transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-gray-900 truncate text-sm">
+                            {r.name}
+                          </h3>
+                          {r.similarity < 1 && r.similarity > 0 && (
+                            <span className="shrink-0 text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded">
+                              {Math.round(r.similarity * 100)}% match
                             </span>
                           )}
-                          <span className="text-[11px] text-green-600">
-                            {r.freshbiteId ? 'View dishes →' : 'Discover →'}
-                          </span>
                         </div>
+                        {(r.address || r.city) && (
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">
+                            📍 {r.address}
+                            {r.address && r.city ? ', ' : ''}
+                            {r.city ?? ''}
+                            {r.state ? `, ${r.state}` : ''}
+                          </p>
+                        )}
+                        {r.matchSource && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {r.matchSource}
+                          </p>
+                        )}
                       </div>
-                    </Link>
-                  );
-                })}
+                      <div className="shrink-0 flex flex-col items-end gap-1 ml-3">
+                        {r.dishCount > 0 && (
+                          <span className="text-[11px] font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+                            {r.dishCount} dish{r.dishCount > 1 ? 'es' : ''}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-green-600">
+                          View →
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </div>
             )}
           </div>
 
-          {/* ── Right Column: Dishes ───────────────────── */}
+          {/* ── RIGHT: dish results ── */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">
-                🍴 {searchQuery ? 'Matching Dishes' : 'Recent Dishes'}
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                🍴 Dishes{' '}
+                <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                  {dishResults.length}
+                </span>
               </h2>
-              <span className="text-xs text-gray-500">
-                {dishes.length} dish{dishes.length !== 1 ? 'es' : ''}
-              </span>
             </div>
 
-            {dishesLoading ? (
+            {!initialLoaded ? (
               <div className="space-y-3">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse"
+                  >
                     <div className="h-4 bg-gray-200 rounded w-2/3 mb-2" />
-                    <div className="h-3 bg-gray-100 rounded w-1/2 mb-1" />
-                    <div className="h-3 bg-gray-100 rounded w-1/3" />
+                    <div className="h-3 bg-gray-100 rounded w-1/2" />
                   </div>
                 ))}
               </div>
-            ) : dishes.length === 0 ? (
+            ) : dishResults.length === 0 ? (
               <div className="text-center py-10 bg-white rounded-lg border border-gray-200">
                 <div className="text-3xl mb-2">🍴</div>
                 <p className="text-gray-500 text-sm">
-                  {searchQuery
-                    ? `No dishes found for "${searchQuery}"`
-                    : 'No dishes yet. Add a restaurant and dish to get started!'}
+                  {dishQuery
+                    ? `No dishes match "${dishQuery}"`
+                    : 'No dishes yet — add a restaurant first!'}
                 </p>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-                {dishes.map((d) => (
+                {dishResults.map((d) => (
                   <Link
                     key={d.id}
                     href={`/dish/${d.id}`}
-                    className="block bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-green-300 transition-all"
+                    className="block bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-orange-300 transition-all"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
@@ -403,8 +563,13 @@ export default function HomePage() {
                             {d.dishName}
                           </h3>
                           {d.cuisine && (
-                            <span className="shrink-0 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
+                            <span className="shrink-0 text-[10px] bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">
                               {d.cuisine}
+                            </span>
+                          )}
+                          {d.similarity < 1 && d.similarity > 0 && (
+                            <span className="shrink-0 text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded">
+                              {Math.round(d.similarity * 100)}% match
                             </span>
                           )}
                         </div>
@@ -419,10 +584,13 @@ export default function HomePage() {
                       </div>
                       <div className="shrink-0 flex flex-col items-end gap-1 ml-3">
                         {d.city && (
-                          <span className="text-[11px] text-gray-400">📍 {d.city}</span>
+                          <span className="text-[11px] text-gray-400">
+                            📍 {d.city}
+                          </span>
                         )}
                         <span className="text-[11px] text-green-600 font-medium">
-                          {d.reviewCount} reviews →
+                          {d.reviewCount} review
+                          {d.reviewCount !== 1 ? 's' : ''} →
                         </span>
                       </div>
                     </div>
@@ -434,9 +602,10 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Footer ─────────────────────────────────────── */}
+      {/* ── footer ── */}
       <div className="max-w-6xl mx-auto px-4 py-8 text-center text-sm text-gray-400">
-        Built with Next.js, Spring Boot, FastAPI &amp; PostgreSQL
+        Built with Next.js, Spring Boot, FastAPI &amp; PostgreSQL · Search
+        powered by pg_trgm
       </div>
     </div>
   );
