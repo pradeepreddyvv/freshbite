@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import PageViewTracker from '@/components/PageViewTracker'
 
 export const metadata: Metadata = {
   title: 'FreshBite - Fresh Dish Reviews',
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <PageViewTracker />
+        {children}
+      </body>
     </html>
   )
 }
