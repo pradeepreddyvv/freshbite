@@ -63,8 +63,24 @@ const TYPE_EMOJIS: Record<string, string> = {
   cafe: '☕',
 };
 
+interface DishResult {
+  id: string;
+  dishName: string;
+  cuisine: string | null;
+  description: string | null;
+  restaurantId: string;
+  restaurantName: string;
+  city: string | null;
+  similarity: number;
+  reviewCount: number;
+}
+
 export default function DiscoverPage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  /* 3 independent search fields */
+  const [restaurantQuery, setRestaurantQuery] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
+  const [dishQuery, setDishQuery] = useState('');
+
   const [radius, setRadius] = useState(5000);
   const [results, setResults] = useState<DiscoveredRestaurant[]>([]);
   const [resolvedLocation, setResolvedLocation] = useState<string | null>(null);
@@ -77,6 +93,9 @@ export default function DiscoverPage() {
   const [importingId, setImportingId] = useState<string | null>(null);
   const [importForm, setImportForm] = useState<{ address: string; city: string }>({ address: '', city: '' });
   const [error, setError] = useState<string | null>(null);
+  const [dishResults, setDishResults] = useState<DishResult[]>([]);
+  const [dishLoading, setDishLoading] = useState(false);
+  const dTimer = useRef<NodeJS.Timeout | null>(null);
   const initialSearchDone = useRef(false);
   const listContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -102,7 +121,7 @@ export default function DiscoverPage() {
         setLocationStatus('granted');
         if (!initialSearchDone.current) {
           initialSearchDone.current = true;
-          doSearch(loc, '', radius);
+          doSearch(loc, '', '', radius);
         }
       },
       () => setLocationStatus('denied'),
@@ -111,14 +130,15 @@ export default function DiscoverPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Unified search: the query can be a location, restaurant name, address, or pincode
+  // Discover search: separate restaurant name and location
   const doSearch = async (
     loc: { lat: number; lng: number } | null,
-    query: string,
+    restName: string,
+    locText: string,
     radiusM: number
   ) => {
-    if (!loc && !query) {
-      setError('Please enter a location, address, restaurant name, or pincode — or enable GPS.');
+    if (!loc && !locText && !restName) {
+      setError('Please enter a restaurant name, location, or enable GPS.');
       return;
     }
 
@@ -127,14 +147,15 @@ export default function DiscoverPage() {
     try {
       const params = new URLSearchParams();
 
-      if (query.trim()) {
-        // Send the same query as both location and name — the backend
-        // will geocode it as a location AND filter by restaurant name
-        params.set('location', query.trim());
-        params.set('name', query.trim());
+      if (locText.trim()) {
+        params.set('location', locText.trim());
       } else if (loc) {
         params.set('lat', loc.lat.toString());
         params.set('lng', loc.lng.toString());
+      }
+
+      if (restName.trim()) {
+        params.set('name', restName.trim());
       }
 
       params.set('radius', radiusM.toString());
@@ -158,7 +179,23 @@ export default function DiscoverPage() {
     }
   };
 
-  const handleSearch = () => doSearch(userLocation, searchQuery, radius);
+  // Dish search via pg_trgm (independent of map/OSM)
+  const searchDishes = useCallback(async (q: string) => {
+    if (!q || q.length < 2) { setDishResults([]); return; }
+    setDishLoading(true);
+    try {
+      const res = await fetch(`/api/search/dishes?q=${encodeURIComponent(q)}`);
+      if (res.ok) { const data = await res.json(); setDishResults(data.results ?? []); }
+    } catch { /* ignore */ } finally { setDishLoading(false); }
+  }, []);
+
+  const onDishInput = (v: string) => {
+    setDishQuery(v);
+    if (dTimer.current) clearTimeout(dTimer.current);
+    dTimer.current = setTimeout(() => searchDishes(v), 350);
+  };
+
+  const handleSearch = () => doSearch(userLocation, restaurantQuery, locationQuery, radius);
 
   const mapRestaurants: MapRestaurant[] = results.map((r, i) => ({
     id: r.osmId || `osm-${i}`,
@@ -205,32 +242,73 @@ export default function DiscoverPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Unified Search */}
+        {/* 3-Field Search */}
         <div className="mb-6 bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            {/* Single search input */}
-            <div className="md:col-span-7">
-              <label className="block text-xs font-medium text-gray-500 mb-1">🔍 Search</label>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Restaurant name, city, address, or pincode..."
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 text-gray-900 outline-none text-sm"
-              />
-              {userLocation && !searchQuery && (
-                <p className="text-[10px] text-gray-400 mt-0.5">Leave empty to use GPS location</p>
+            {/* Restaurant name search */}
+            <div className="md:col-span-3">
+              <label className="block text-xs font-medium text-gray-500 mb-1">🏪 Restaurant</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={restaurantQuery}
+                  onChange={(e) => setRestaurantQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="e.g. Pizza Hut..."
+                  className="w-full px-3 py-2.5 pr-7 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 text-gray-900 outline-none text-sm"
+                />
+                {restaurantQuery && (
+                  <button onClick={() => setRestaurantQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                )}
+              </div>
+            </div>
+
+            {/* Location search */}
+            <div className="md:col-span-3">
+              <label className="block text-xs font-medium text-gray-500 mb-1">📍 Location</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="City, address, zip..."
+                  className="w-full px-3 py-2.5 pr-7 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 outline-none text-sm"
+                />
+                {locationQuery && (
+                  <button onClick={() => setLocationQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                )}
+              </div>
+              {userLocation && !locationQuery && (
+                <p className="text-[10px] text-gray-400 mt-0.5">Leave empty for GPS</p>
               )}
             </div>
 
-            {/* Radius */}
+            {/* Dish search (fuzzy, independent) */}
             <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1">📏 Radius</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">🍴 Dish</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={dishQuery}
+                  onChange={(e) => onDishInput(e.target.value)}
+                  placeholder="Biryani, pizza..."
+                  className="w-full px-3 py-2.5 pr-7 rounded-lg border border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900 outline-none text-sm"
+                />
+                {dishQuery && (
+                  <button onClick={() => { setDishQuery(''); setDishResults([]); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                )}
+                {dishLoading && <span className="absolute right-7 top-1/2 -translate-y-1/2 w-3 h-3 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />}
+              </div>
+            </div>
+
+            {/* Radius */}
+            <div className="md:col-span-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">📏</label>
               <select
                 value={radius}
                 onChange={(e) => setRadius(Number(e.target.value))}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 text-gray-900 outline-none text-sm bg-white"
+                className="w-full px-2 py-2.5 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 text-gray-900 outline-none text-sm bg-white"
               >
                 {RADIUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -251,12 +329,12 @@ export default function DiscoverPage() {
                     Searching...
                   </span>
                 ) : (
-                  '🔎 Search'
+                  '🔎 Discover'
                 )}
               </button>
               {userLocation && (
                 <button
-                  onClick={() => { setSearchQuery(''); doSearch(userLocation, '', radius); }}
+                  onClick={() => { setRestaurantQuery(''); setLocationQuery(''); doSearch(userLocation, '', '', radius); }}
                   disabled={loading}
                   className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium py-2.5 px-3 rounded-lg transition-colors text-sm"
                   title="Search near me"
@@ -268,6 +346,15 @@ export default function DiscoverPage() {
           </div>
 
           {/* Status banners */}
+          {/* Active search chips */}
+          {(restaurantQuery || locationQuery || dishQuery) && (
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              {restaurantQuery && <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full border border-green-200">🏪 {restaurantQuery} <button onClick={() => setRestaurantQuery('')} className="hover:text-green-900">✕</button></span>}
+              {locationQuery && <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full border border-blue-200">📍 {locationQuery} <button onClick={() => setLocationQuery('')} className="hover:text-blue-900">✕</button></span>}
+              {dishQuery && <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-700 text-xs font-medium px-2 py-0.5 rounded-full border border-orange-200">🍴 {dishQuery} <button onClick={() => { setDishQuery(''); setDishResults([]); }} className="hover:text-orange-900">✕</button></span>}
+            </div>
+          )}
+
           {resolvedLocation && (
             <div className="mt-3 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
               📌 Showing results near: <strong className="text-gray-700">{resolvedLocation}</strong>
@@ -306,19 +393,20 @@ export default function DiscoverPage() {
           <div ref={listContainerRef} className="lg:col-span-2 space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
             <p className="text-sm text-gray-500 mb-2">
               {results.length} restaurant{results.length !== 1 ? 's' : ''} found
-              {searchQuery && ` for "${searchQuery}"`}
+              {restaurantQuery && ` matching "${restaurantQuery}"`}
+              {locationQuery && ` near "${locationQuery}"`}
             </p>
 
             {results.length === 0 && !loading && (
               <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                 <div className="text-4xl mb-3">🌍</div>
                 <p className="text-gray-500">
-                  {searchQuery
+                  {(restaurantQuery || locationQuery)
                     ? 'No restaurants found — try a different search or larger radius'
                     : 'Enter a location or allow GPS to discover restaurants'}
                 </p>
                 <p className="text-xs text-gray-400 mt-2">
-                  Search by restaurant name, city, address, or pincode
+                  Use separate fields for restaurant name, location, and dish
                 </p>
               </div>
             )}
@@ -497,8 +585,42 @@ export default function DiscoverPage() {
           </div>
         </div>
 
+        {/* Dish Results (from pg_trgm fuzzy search) */}
+        {dishQuery && (
+          <div className="mt-6">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-3">
+              🍴 Dish Results
+              <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{dishResults.length}</span>
+            </h2>
+            {dishResults.length === 0 ? (
+              <div className="text-center py-6 bg-white rounded-lg border border-gray-200">
+                <p className="text-gray-500 text-sm">No dishes match &quot;{dishQuery}&quot;</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {dishResults.map((d) => (
+                  <Link key={d.id} href={`/dish/${d.id}`} className="block bg-white rounded-lg border border-gray-200 p-3.5 hover:shadow-md hover:border-orange-300 transition-all">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-gray-900 truncate text-sm">{d.dishName}</h3>
+                          {d.cuisine && <span className="shrink-0 text-[10px] bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">{d.cuisine}</span>}
+                          {d.similarity < 1 && d.similarity > 0 && <span className="shrink-0 text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded">{Math.round(d.similarity * 100)}%</span>}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">at {d.restaurantName}</p>
+                        {d.city && <p className="text-[11px] text-gray-400">📍 {d.city}</p>}
+                      </div>
+                      <span className="text-[11px] text-green-600 font-medium shrink-0 ml-2">{d.reviewCount} review{d.reviewCount !== 1 ? 's' : ''} →</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-6 text-center text-xs text-gray-400">
-          Data powered by <strong>OpenStreetMap</strong> (Overpass API + Nominatim) — free & open-source 🌍
+          Map powered by <strong>OpenStreetMap</strong> · DB search by <strong>pg_trgm</strong> 🌍
         </div>
       </div>
     </div>

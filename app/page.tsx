@@ -207,32 +207,53 @@ export default function HomePage() {
 
   const anyActive = restaurantQuery || locationQuery || dishQuery;
 
-  /* ── merge restaurant + location results (de-dup by id) ── */
+  /* ── merge restaurant + location results ──
+   *  Both active  → INTERSECTION (only restaurants matching both name AND location)
+   *  One active   → show that result set
+   *  Neither      → show initial data
+   */
   const merged = (() => {
-    const seen = new Set<string>();
     const out: Array<RestaurantResult & { matchSource: string }> = [];
+    const bothActive = restaurantQuery.length >= 2 && locationQuery.length >= 2;
 
-    for (const r of restaurantResults) {
-      if (!seen.has(r.id)) {
-        seen.add(r.id);
-        out.push({
-          ...r,
-          matchSource: restaurantQuery ? 'Name match' : '',
-        });
+    if (bothActive) {
+      // INTERSECTION: only restaurants that appear in BOTH sets
+      const locationIds = new Set(locationResults.map((r) => r.id));
+      for (const r of restaurantResults) {
+        if (locationIds.has(r.id)) {
+          const locMatch = locationResults.find((l) => l.id === r.id);
+          out.push({
+            ...r,
+            matchSource: `Name match · 📍 ${locMatch?.matchedField ?? 'location'}`,
+          });
+        }
       }
-    }
+    } else {
+      // UNION when only one is active (or neither)
+      const seen = new Set<string>();
 
-    for (const r of locationResults) {
-      if (!seen.has(r.id)) {
-        seen.add(r.id);
-        out.push({
-          ...r,
-          matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}`,
-        });
-      } else {
-        const existing = out.find((m) => m.id === r.id);
-        if (existing && !existing.matchSource.includes('📍')) {
-          existing.matchSource += ` · 📍 ${r.matchedField}`;
+      for (const r of restaurantResults) {
+        if (!seen.has(r.id)) {
+          seen.add(r.id);
+          out.push({
+            ...r,
+            matchSource: restaurantQuery ? 'Name match' : '',
+          });
+        }
+      }
+
+      for (const r of locationResults) {
+        if (!seen.has(r.id)) {
+          seen.add(r.id);
+          out.push({
+            ...r,
+            matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}`,
+          });
+        } else {
+          const existing = out.find((m) => m.id === r.id);
+          if (existing && !existing.matchSource.includes('📍')) {
+            existing.matchSource += ` · 📍 ${r.matchedField}`;
+          }
         }
       }
     }
