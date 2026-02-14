@@ -14,6 +14,22 @@ interface RestaurantResult {
   longitude: number | null;
   similarity: number;
   dishCount: number;
+  distanceKm?: number | null;
+}
+
+interface NearbyRestaurant {
+  osmId: string;
+  name: string;
+  cuisine: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  latitude: number;
+  longitude: number;
+  distanceKm: number | null;
+  source: 'osm' | 'freshbite';
+  freshbiteId: string | null;
 }
 
 interface LocationResult {
@@ -67,6 +83,13 @@ export default function HomePage() {
   const [dSugLoading, setDSugLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+
+  /* ── nearby / geolocation state ── */
+  const [nearbyRestaurants, setNearbyRestaurants] = useState<NearbyRestaurant[]>([]);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLng, setUserLng] = useState<number | null>(null);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'granted' | 'denied'>('idle');
 
   /* ── refs ── */
   const rTimer = useRef<NodeJS.Timeout | null>(null);
@@ -230,7 +253,7 @@ export default function HomePage() {
     setSearching(false);
   }, [restaurantQuery, locationQuery, dishQuery]);
 
-  /* ── initial load (all restaurants + dishes) ── */
+  /* ── initial load (all restaurants + dishes + nearby via geolocation) ── */
   useEffect(() => {
     (async () => {
       try {
@@ -264,6 +287,30 @@ export default function HomePage() {
         }
       } catch { /* ignore */ } finally { setInitialLoaded(true); }
     })();
+
+    // Request geolocation and fetch nearby restaurants
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      setLocationStatus('loading');
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setUserLat(lat);
+          setUserLng(lng);
+          setLocationStatus('granted');
+          setNearbyLoading(true);
+          try {
+            const res = await fetch(`/api/discover?lat=${lat}&lng=${lng}&radius=20000&limit=100`);
+            if (res.ok) {
+              const data = await res.json();
+              setNearbyRestaurants(data.restaurants ?? []);
+            }
+          } catch { /* ignore */ } finally { setNearbyLoading(false); }
+        },
+        () => { setLocationStatus('denied'); },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+      );
+    }
   }, []);
 
   /* ── clear helpers ── */
@@ -273,47 +320,74 @@ export default function HomePage() {
 
   const anyActive = restaurantQuery || locationQuery || dishQuery;
 
-  /* ── merge restaurant + location results ──
-   *  Restaurant API results are always listed first.
-   *  Remaining location-only matches are appended after.
+  /* ── haversine distance helper ── */
+  const haversineKm = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }, []);
+
+  /* ── merge restaurant + location + nearby results ──
+   *  1. Merge nearby discover results with DB restaurants
+   *  2. Sort by distance (nearest first) when location is available
+   *  3. Restaurant API results respect search ordering when searching
    */
   const merged = (() => {
-    const out: Array<RestaurantResult & { matchSource: string }> = [];
+    const out: Array<RestaurantResult & { matchSource: string; distanceKm?: number | null }> = [];
     const bothActive = restaurantQuery.length >= 1 && locationQuery.length >= 1;
+    const isSearching = restaurantQuery.length >= 1 || locationQuery.length >= 1;
 
     if (bothActive) {
       const seen = new Set<string>();
       const locationById = new Map(locationResults.map((r) => [r.id, r]));
 
-      // 1) Always include all restaurant API results first
       for (const r of restaurantResults) {
         seen.add(r.id);
         const locMatch = locationById.get(r.id);
+        const dist = (userLat != null && userLng != null && r.latitude && r.longitude)
+          ? Number(haversineKm(userLat, userLng, r.latitude, r.longitude).toFixed(1))
+          : null;
         out.push({
           ...r,
+          distanceKm: dist,
           matchSource: locMatch ? `Name match · 📍 ${locMatch.matchedField}` : 'Name match',
         });
       }
 
-      // 2) Append remaining location-only matches
       for (const r of locationResults) {
         if (!seen.has(r.id)) {
           seen.add(r.id);
-          out.push({ ...r, matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}` });
+          const dist = (userLat != null && userLng != null && r.latitude && r.longitude)
+            ? Number(haversineKm(userLat, userLng, r.latitude, r.longitude).toFixed(1))
+            : null;
+          out.push({ ...r, distanceKm: dist, matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}` });
         }
       }
     } else {
       const seen = new Set<string>();
+
+      // Add DB restaurants first
       for (const r of restaurantResults) {
         if (!seen.has(r.id)) {
           seen.add(r.id);
-          out.push({ ...r, matchSource: restaurantQuery ? 'Name match' : '' });
+          const dist = (userLat != null && userLng != null && r.latitude && r.longitude)
+            ? Number(haversineKm(userLat, userLng, r.latitude, r.longitude).toFixed(1))
+            : null;
+          out.push({ ...r, distanceKm: dist, matchSource: restaurantQuery ? 'Name match' : '' });
         }
       }
+
+      // Add location results
       for (const r of locationResults) {
         if (!seen.has(r.id)) {
           seen.add(r.id);
-          out.push({ ...r, matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}` });
+          const dist = (userLat != null && userLng != null && r.latitude && r.longitude)
+            ? Number(haversineKm(userLat, userLng, r.latitude, r.longitude).toFixed(1))
+            : null;
+          out.push({ ...r, distanceKm: dist, matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}` });
         } else {
           const existing = out.find((m) => m.id === r.id);
           if (existing && !existing.matchSource.includes('📍')) {
@@ -321,38 +395,77 @@ export default function HomePage() {
           }
         }
       }
+
+      // Merge nearby discover results (only when not actively searching)
+      if (!isSearching && nearbyRestaurants.length > 0) {
+        for (const nr of nearbyRestaurants) {
+          // Use freshbiteId if available, otherwise use osmId
+          const id = nr.freshbiteId || `osm-${nr.osmId}`;
+          if (!seen.has(id)) {
+            seen.add(id);
+            out.push({
+              id,
+              name: nr.name,
+              city: nr.city,
+              address: nr.address,
+              state: nr.state,
+              latitude: nr.latitude,
+              longitude: nr.longitude,
+              similarity: 1,
+              dishCount: 0,
+              distanceKm: nr.distanceKm,
+              matchSource: nr.source === 'freshbite' ? '📍 Nearby' : '📍 Nearby · via OSM',
+            });
+          } else {
+            // If already in list from DB, enrich with distance
+            const existing = out.find((m) => m.id === id);
+            if (existing && existing.distanceKm == null && nr.distanceKm != null) {
+              existing.distanceKm = nr.distanceKm;
+            }
+            if (existing && !existing.matchSource.includes('Nearby')) {
+              existing.matchSource = existing.matchSource ? `${existing.matchSource} · 📍 Nearby` : '📍 Nearby';
+            }
+          }
+        }
+      }
     }
 
-    // API-first ordering:
-    // show direct API hits first, then remaining merged/fallback results.
-    const rIndex = new Map<string, number>();
-    const lIndex = new Map<string, number>();
-    restaurantResults.forEach((r, i) => rIndex.set(r.id, i));
-    locationResults.forEach((r, i) => lIndex.set(r.id, i));
+    // Sort: when user has location, sort by distance (nearest first)
+    // When searching, respect API ranking first
+    if (isSearching) {
+      const rIndex = new Map<string, number>();
+      const lIndex = new Map<string, number>();
+      restaurantResults.forEach((r, i) => rIndex.set(r.id, i));
+      locationResults.forEach((r, i) => lIndex.set(r.id, i));
 
-    const hasRestaurantApi = restaurantQuery.trim().length >= 1;
-    const hasLocationApi = locationQuery.trim().length >= 1;
+      const hasRestaurantApi = restaurantQuery.trim().length >= 1;
+      const hasLocationApi = locationQuery.trim().length >= 1;
 
+      return out.sort((a, b) => {
+        const aInR = hasRestaurantApi && rIndex.has(a.id);
+        const bInR = hasRestaurantApi && rIndex.has(b.id);
+        const aInL = hasLocationApi && lIndex.has(a.id);
+        const bInL = hasLocationApi && lIndex.has(b.id);
+
+        const aBoth = aInR && aInL;
+        const bBoth = bInR && bInL;
+        if (aBoth !== bBoth) return aBoth ? -1 : 1;
+
+        const aAny = aInR || aInL;
+        const bAny = bInR || bInL;
+        if (aAny !== bAny) return aAny ? -1 : 1;
+
+        const aRank = (rIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) + (lIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER);
+        const bRank = (rIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER) + (lIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER);
+        return aRank - bRank;
+      });
+    }
+
+    // Default: sort by distance (nearest first), null distances go to bottom
     return out.sort((a, b) => {
-      const aInR = hasRestaurantApi && rIndex.has(a.id);
-      const bInR = hasRestaurantApi && rIndex.has(b.id);
-      const aInL = hasLocationApi && lIndex.has(a.id);
-      const bInL = hasLocationApi && lIndex.has(b.id);
-
-      // when both filters are active, intersection (present in both APIs) should be first
-      const aBoth = aInR && aInL;
-      const bBoth = bInR && bInL;
-      if (aBoth !== bBoth) return aBoth ? -1 : 1;
-
-      // then single-source API hits
-      const aAny = aInR || aInL;
-      const bAny = bInR || bInL;
-      if (aAny !== bAny) return aAny ? -1 : 1;
-
-      // stable ranking by API order, then keep existing order
-      const aRank = (rIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) + (lIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER);
-      const bRank = (rIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER) + (lIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER);
-      return aRank - bRank;
+      const aDist = a.distanceKm ?? 99999;
+      const bDist = b.distanceKm ?? 99999;
+      return aDist - bDist;
     });
   })();
 
@@ -597,7 +710,31 @@ export default function HomePage() {
                 🏪 Restaurants{' '}
                 <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{merged.length}</span>
               </h2>
-              <Link href="/discover" className="text-xs text-green-600 hover:underline font-medium">Map view →</Link>
+              <div className="flex items-center gap-2">
+                {locationStatus === 'loading' && (
+                  <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                    <span className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                    Locating…
+                  </span>
+                )}
+                {nearbyLoading && (
+                  <span className="text-[11px] text-blue-500 flex items-center gap-1">
+                    <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    Finding nearby…
+                  </span>
+                )}
+                {locationStatus === 'granted' && !nearbyLoading && nearbyRestaurants.length > 0 && (
+                  <span className="text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
+                    📍 {nearbyRestaurants.length} nearby
+                  </span>
+                )}
+                {locationStatus === 'denied' && (
+                  <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200" title="Enable location to see nearby restaurants">
+                    📍 Location off
+                  </span>
+                )}
+                <Link href="/discover" className="text-xs text-green-600 hover:underline font-medium">Map view →</Link>
+              </div>
             </div>
 
             {!initialLoaded ? (
@@ -622,10 +759,13 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-                {merged.map((r) => (
+                {merged.map((r) => {
+                  const isOsmOnly = r.id.startsWith('osm-');
+                  const href = isOsmOnly ? '/restaurant/add' : `/restaurant/${r.id}`;
+                  return (
                   <Link
                     key={r.id}
-                    href={`/restaurant/${r.id}`}
+                    href={href}
                     className="block bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-green-300 transition-all"
                   >
                     <div className="flex items-start justify-between">
@@ -648,6 +788,11 @@ export default function HomePage() {
                         )}
                       </div>
                       <div className="shrink-0 flex flex-col items-end gap-1 ml-3">
+                        {r.distanceKm != null && (
+                          <span className="text-[11px] font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                            {r.distanceKm < 1 ? `${Math.round(r.distanceKm * 1000)}m` : `${r.distanceKm} km`}
+                          </span>
+                        )}
                         {r.dishCount > 0 && (
                           <span className="text-[11px] font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
                             {r.dishCount} dish{r.dishCount > 1 ? 'es' : ''}
@@ -657,7 +802,8 @@ export default function HomePage() {
                       </div>
                     </div>
                   </Link>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

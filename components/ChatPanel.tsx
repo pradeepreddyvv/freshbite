@@ -127,10 +127,10 @@ export function ChatPanel({ dishId, window = '24h' }: ChatPanelProps) {
   };
 
   return (
-    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200 p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-2xl">🤖</span>
-        <h2 className="text-lg font-semibold text-gray-900">
+    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200 p-4 sm:p-6">
+      <div className="flex items-center gap-2 mb-3 sm:mb-4">
+        <span className="text-xl sm:text-2xl">🤖</span>
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900">
           Ask About This Dish
         </h2>
       </div>

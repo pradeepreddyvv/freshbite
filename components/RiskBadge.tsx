@@ -6,8 +6,8 @@ interface RiskBadgeProps {
 
 export function RiskBadge({ risk }: RiskBadgeProps) {
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${risk.color} ${risk.bgColor}`}>
-      <span className="text-base">{risk.emoji}</span>
+    <div className={`inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium ${risk.color} ${risk.bgColor}`}>
+      <span className="text-sm sm:text-base">{risk.emoji}</span>
       <span>{risk.label}</span>
     </div>
   );

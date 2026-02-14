@@ -57,8 +57,8 @@ export function ReviewForm({ dishId, onSuccess }: ReviewFormProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">
+    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
         Write a Review
       </h2>
 
@@ -79,7 +79,7 @@ export function ReviewForm({ dishId, onSuccess }: ReviewFormProps) {
                 className="focus:outline-none transition-transform hover:scale-110"
               >
                 <svg
-                  className={`w-8 h-8 ${
+                  className={`w-7 h-7 sm:w-8 sm:h-8 ${
                     star <= (hoveredStar ?? rating)
                       ? 'text-yellow-400 fill-current'
                       : 'text-gray-300'

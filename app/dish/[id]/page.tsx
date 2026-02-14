@@ -115,19 +115,19 @@ export default async function DishPage({ params, searchParams }: PageProps) {
       />
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Reviews & Form */}
-          <div className="lg:col-span-2 space-y-6">
-            <ReviewForm dishId={id} />
-            <ReviewFeed reviews={reviews} />
-          </div>
-
-          {/* Right Column - Chat Stub */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-4">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
+          {/* Chat Panel - shown first on mobile for quick access */}
+          <div className="lg:col-span-1 lg:order-2">
+            <div className="lg:sticky lg:top-4">
               <ChatPanel dishId={id} window={window} />
             </div>
+          </div>
+
+          {/* Reviews & Form */}
+          <div className="lg:col-span-2 lg:order-1 space-y-4 sm:space-y-6">
+            <ReviewForm dishId={id} />
+            <ReviewFeed reviews={reviews} />
           </div>
         </div>
       </div>

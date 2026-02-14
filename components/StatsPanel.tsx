@@ -12,29 +12,31 @@ interface StatsPanelProps {
 export function StatsPanel({ avgRating, reviewCount, window, risk }: StatsPanelProps) {
   return (
     <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-gray-200">
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* Freshness Banner */}
-        <div className="mb-4 flex items-center gap-2 text-sm text-gray-700">
-          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="mb-3 sm:mb-4 flex items-start sm:items-center gap-2 text-sm text-gray-700">
+          <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span className="font-medium">
-            Showing reviews from the {getWindowLabel(window)}
-          </span>
-          <span className="text-gray-500">— Only fresh data matters!</span>
+          <div>
+            <span className="font-medium">
+              Showing reviews from the {getWindowLabel(window)}
+            </span>
+            <span className="text-gray-500 hidden sm:inline"> — Only fresh data matters!</span>
+          </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
           {/* Average Rating */}
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="text-sm font-medium text-gray-600 mb-1">Average Rating</div>
-            <div className="flex items-baseline gap-2">
+          <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 border border-gray-200">
+            <div className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Average Rating</div>
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
               {avgRating !== null ? (
                 <>
-                  <div className="text-3xl font-bold text-gray-900">{avgRating}</div>
-                  <div className="text-gray-500">/ 5</div>
-                  <div className="flex gap-0.5 ml-2">
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900">{avgRating}</div>
+                  <div className="text-gray-500 text-xs sm:text-base">/ 5</div>
+                  <div className="flex gap-0.5 sm:ml-2 hidden sm:flex">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <svg
                         key={star}
@@ -58,17 +60,17 @@ export function StatsPanel({ avgRating, reviewCount, window, risk }: StatsPanelP
           </div>
 
           {/* Review Count */}
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="text-sm font-medium text-gray-600 mb-1">Reviews</div>
-            <div className="flex items-baseline gap-2">
-              <div className="text-3xl font-bold text-gray-900">{reviewCount}</div>
-              <div className="text-gray-500">recent</div>
+          <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 border border-gray-200">
+            <div className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Reviews</div>
+            <div className="flex items-baseline gap-1 sm:gap-2">
+              <div className="text-2xl sm:text-3xl font-bold text-gray-900">{reviewCount}</div>
+              <div className="text-gray-500 text-xs sm:text-base">recent</div>
             </div>
           </div>
 
           {/* Risk Label */}
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="text-sm font-medium text-gray-600 mb-1">Status</div>
+          <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 border border-gray-200">
+            <div className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Status</div>
             <div className="mt-1">
               <RiskBadge risk={risk} />
             </div>
