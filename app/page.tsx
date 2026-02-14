@@ -274,33 +274,32 @@ export default function HomePage() {
   const anyActive = restaurantQuery || locationQuery || dishQuery;
 
   /* ── merge restaurant + location results ──
-   *  Both active  → INTERSECTION
-   *  One active   → that result set
-   *  Neither      → initial data
+   *  Restaurant API results are always listed first.
+   *  Remaining location-only matches are appended after.
    */
   const merged = (() => {
     const out: Array<RestaurantResult & { matchSource: string }> = [];
     const bothActive = restaurantQuery.length >= 1 && locationQuery.length >= 1;
 
     if (bothActive) {
-      const locationIds = new Set(locationResults.map((r) => r.id));
+      const seen = new Set<string>();
+      const locationById = new Map(locationResults.map((r) => [r.id, r]));
+
+      // 1) Always include all restaurant API results first
       for (const r of restaurantResults) {
-        if (locationIds.has(r.id)) {
-          const locMatch = locationResults.find((l) => l.id === r.id);
-          out.push({ ...r, matchSource: `Name match · 📍 ${locMatch?.matchedField ?? 'location'}` });
-        }
+        seen.add(r.id);
+        const locMatch = locationById.get(r.id);
+        out.push({
+          ...r,
+          matchSource: locMatch ? `Name match · 📍 ${locMatch.matchedField}` : 'Name match',
+        });
       }
-      // If intersection is empty, fall back to showing both (more data > no data)
-      if (out.length === 0) {
-        const seen = new Set<string>();
-        for (const r of restaurantResults) {
-          if (!seen.has(r.id)) { seen.add(r.id); out.push({ ...r, matchSource: 'Name match' }); }
-        }
-        for (const r of locationResults) {
-          if (!seen.has(r.id)) {
-            seen.add(r.id);
-            out.push({ ...r, matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}` });
-          }
+
+      // 2) Append remaining location-only matches
+      for (const r of locationResults) {
+        if (!seen.has(r.id)) {
+          seen.add(r.id);
+          out.push({ ...r, matchSource: `📍 ${r.matchedField}: ${r[r.matchedField] ?? ''}` });
         }
       }
     } else {
