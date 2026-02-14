@@ -323,7 +323,38 @@ export default function HomePage() {
         }
       }
     }
-    return out;
+
+    // API-first ordering:
+    // show direct API hits first, then remaining merged/fallback results.
+    const rIndex = new Map<string, number>();
+    const lIndex = new Map<string, number>();
+    restaurantResults.forEach((r, i) => rIndex.set(r.id, i));
+    locationResults.forEach((r, i) => lIndex.set(r.id, i));
+
+    const hasRestaurantApi = restaurantQuery.trim().length >= 1;
+    const hasLocationApi = locationQuery.trim().length >= 1;
+
+    return out.sort((a, b) => {
+      const aInR = hasRestaurantApi && rIndex.has(a.id);
+      const bInR = hasRestaurantApi && rIndex.has(b.id);
+      const aInL = hasLocationApi && lIndex.has(a.id);
+      const bInL = hasLocationApi && lIndex.has(b.id);
+
+      // when both filters are active, intersection (present in both APIs) should be first
+      const aBoth = aInR && aInL;
+      const bBoth = bInR && bInL;
+      if (aBoth !== bBoth) return aBoth ? -1 : 1;
+
+      // then single-source API hits
+      const aAny = aInR || aInL;
+      const bAny = bInR || bInL;
+      if (aAny !== bAny) return aAny ? -1 : 1;
+
+      // stable ranking by API order, then keep existing order
+      const aRank = (rIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) + (lIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER);
+      const bRank = (rIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER) + (lIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER);
+      return aRank - bRank;
+    });
   })();
 
   /* ── handle Enter key on any input ── */
