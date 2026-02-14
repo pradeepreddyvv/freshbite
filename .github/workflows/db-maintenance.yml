@@ -1,0 +1,47 @@
+name: DB Maintenance (Rollup + Partition + Health)
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Refresh daily rollups (last 3 days)
+        run: |
+          curl -X POST "${{ secrets.SITE_URL }}/api/maintenance/rollup?days=3" \
+            -H "Authorization: Bearer ${{ secrets.ALERTS_SECRET_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
+          echo "✅ Rollup refresh completed"
+
+      - name: Partition maintenance
+        run: |
+          curl -X POST "${{ secrets.SITE_URL }}/api/maintenance/partitions" \
+            -H "Authorization: Bearer ${{ secrets.ALERTS_SECRET_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
+          echo "✅ Partition maintenance completed"
+
+      - name: DB health check (with snapshot)
+        run: |
+          curl -X POST "${{ secrets.SITE_URL }}/api/db-health" \
+            -H "Authorization: Bearer ${{ secrets.ALERTS_SECRET_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
+          echo "✅ Health check completed"
+
+      - name: Retention cleanup (if enabled)
+        run: |
+          curl -X POST "${{ secrets.SITE_URL }}/api/maintenance/retention" \
+            -H "Authorization: Bearer ${{ secrets.ALERTS_SECRET_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
+          echo "✅ Retention cleanup completed"
+
+      - name: Log completion
+        run: echo "🎉 All maintenance tasks completed at $(date)"

@@ -26,8 +26,7 @@ export default function AddRestaurantPage() {
     };
 
     try {
-      const baseUrl = process.env.BACKEND_URL || '';
-      const res = await fetch(`${baseUrl}/api/restaurants`, {
+      const res = await fetch(`/api/restaurants`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

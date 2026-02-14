@@ -97,8 +97,7 @@ export function ChatPanel({ dishId, window = '24h' }: ChatPanelProps) {
     setIsLoading(true);
 
     try {
-      const baseUrl = process.env.BACKEND_URL || '';
-      const res = await fetch(`${baseUrl}/api/chat`, {
+      const res = await fetch(`/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

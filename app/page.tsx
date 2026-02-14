@@ -48,13 +48,12 @@ export default function HomePage() {
   const [searching, setSearching] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const baseUrl = process.env.BACKEND_URL || '';
 
   /* ── Fetch dishes (initial + search) ─────────────────── */
   const fetchDishes = useCallback(async (query?: string) => {
     setDishesLoading(true);
     try {
-      const url = query ? `${baseUrl}/api/dishes?q=${encodeURIComponent(query)}` : `${baseUrl}/api/dishes`;
+      const url = query ? `/api/dishes?q=${encodeURIComponent(query)}` : `/api/dishes`;
       const res = await fetch(url);
       if (res.ok) setDishes(await res.json());
       else setDishes([]);
@@ -63,7 +62,7 @@ export default function HomePage() {
     } finally {
       setDishesLoading(false);
     }
-  }, [baseUrl]);
+  }, []);
 
   /* ── Fetch nearby restaurants ────────────────────────── */
   const fetchNearby = useCallback(async (
@@ -83,7 +82,7 @@ export default function HomePage() {
       params.set('radius', '5000');
       params.set('limit', '50');
 
-      const res = await fetch(`${baseUrl}/api/discover?${params.toString()}`);
+      const res = await fetch(`/api/discover?${params.toString()}`);
       if (res.ok) {
         const data: DiscoverResponse = await res.json();
         setNearbyRestaurants(data.restaurants);
@@ -94,7 +93,7 @@ export default function HomePage() {
     } finally {
       setNearbyLoading(false);
     }
-  }, [baseUrl]);
+  }, []);
 
   /* ── Initial load: GPS + all dishes ──────────────────── */
   useEffect(() => {

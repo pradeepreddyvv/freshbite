@@ -60,7 +60,7 @@ interface ReviewListResponse {
 }
 
 async function fetchSummary(id: string, window: TimeWindow) {
-  const baseUrl = process.env.BACKEND_URL || '';
+  const baseUrl = process.env.BACKEND_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
   const response = await fetch(`${baseUrl}/api/dish/${id}/summary?window=${window}`, { cache: 'no-store' });
   if (!response.ok) {
     return null;
@@ -69,7 +69,7 @@ async function fetchSummary(id: string, window: TimeWindow) {
 }
 
 async function fetchReviews(id: string, window: TimeWindow) {
-  const baseUrl = process.env.BACKEND_URL || '';
+  const baseUrl = process.env.BACKEND_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
   const response = await fetch(`${baseUrl}/api/dish/${id}/reviews?window=${window}`, { cache: 'no-store' });
   if (!response.ok) {
     return null;

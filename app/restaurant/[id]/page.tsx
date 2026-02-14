@@ -33,8 +33,6 @@ export default function RestaurantPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const baseUrl = process.env.BACKEND_URL || '';
-
   useEffect(() => {
     fetchData();
   }, [restaurantId]);
@@ -42,8 +40,8 @@ export default function RestaurantPage() {
   async function fetchData() {
     try {
       const [restRes, dishesRes] = await Promise.all([
-        fetch(`${baseUrl}/api/restaurants`),
-        fetch(`${baseUrl}/api/restaurants/${restaurantId}/dishes`),
+        fetch(`/api/restaurants`),
+        fetch(`/api/restaurants/${restaurantId}/dishes`),
       ]);
 
       if (restRes.ok) {
@@ -76,7 +74,7 @@ export default function RestaurantPage() {
     };
 
     try {
-      const res = await fetch(`${baseUrl}/api/restaurants/${restaurantId}/dishes`, {
+      const res = await fetch(`/api/restaurants/${restaurantId}/dishes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

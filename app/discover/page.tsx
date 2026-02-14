@@ -125,7 +125,6 @@ export default function DiscoverPage() {
     setLoading(true);
     setError(null);
     try {
-      const baseUrl = process.env.BACKEND_URL || '';
       const params = new URLSearchParams();
 
       if (query.trim()) {
@@ -141,7 +140,7 @@ export default function DiscoverPage() {
       params.set('radius', radiusM.toString());
       params.set('limit', '150');
 
-      const res = await fetch(`${baseUrl}/api/discover?${params.toString()}`);
+      const res = await fetch(`/api/discover?${params.toString()}`);
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `Error ${res.status}`);
@@ -346,12 +345,12 @@ export default function DiscoverPage() {
                 }
 
                 try {
-                  const baseUrl = process.env.BACKEND_URL || '';
-                  const res = await fetch(`${baseUrl}/api/restaurants`, {
+                  const res = await fetch(`/api/restaurants`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       name: r.name,
+                      osmPlaceId: r.osmId || undefined,
                       address: address || undefined,
                       city: city || undefined,
                       state: r.state || undefined,

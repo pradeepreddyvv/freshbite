@@ -21,8 +21,7 @@ export function ReviewForm({ dishId, onSuccess }: ReviewFormProps) {
     setIsSubmitting(true);
 
     try {
-      const baseUrl = process.env.BACKEND_URL || '';
-      const response = await fetch(`${baseUrl}/api/dish/${dishId}/reviews`, {
+      const response = await fetch(`/api/dish/${dishId}/reviews`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -14,21 +14,23 @@ datasource db {
 // CORE MODELS
 
 model Restaurant {
-  id        String   @id @default(cuid())
-  name      String
-  address   String?
-  city      String?
-  state     String?
-  country   String   @default("USA")
-  timezone  String   @default("America/Los_Angeles") // IANA timezone for future meal slot derivation
-  latitude  Float?
-  longitude Float?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  osmPlaceId  String?  @unique @map("osm_place_id") // OSM place_id — dedup key
+  name        String
+  address     String?
+  city        String?
+  state       String?
+  country     String   @default("USA")
+  timezone    String   @default("America/Los_Angeles") // IANA timezone for future meal slot derivation
+  latitude    Float?
+  longitude   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   dishesAtRestaurant DishAtRestaurant[]
 
   @@index([city])
+  @@index([name])
 }
 
 model Dish {
@@ -58,6 +60,7 @@ model DishAtRestaurant {
   dish       Dish       @relation(fields: [dishId], references: [id], onDelete: Cascade)
   reviews    Review[]
   alerts     AlertSubscription[]
+  rollups    DailyRollup[]
 
   @@unique([restaurantId, dishId])
   @@index([restaurantId])
@@ -104,4 +107,56 @@ model AlertSubscription {
 
   @@index([dishAtRestaurantId])
   @@index([isActive])
+}
+
+// ── STORAGE OPTIMIZATION MODELS ────────────────────────────
+
+// Daily rollup: pre-aggregated stats per dishAtRestaurant per day
+// Used by summary/stats endpoints for >= 48h windows to avoid scanning raw reviews
+model DailyRollup {
+  id                 String   @id @default(cuid())
+  dishAtRestaurantId String
+  rollupDate         DateTime @db.Date // The calendar date (UTC) this rollup covers
+  reviewCount        Int      @default(0)
+  ratingSum          Int      @default(0) // sum of ratings for avg calculation
+  rating1Count       Int      @default(0) @map("rating_1_count")
+  rating2Count       Int      @default(0) @map("rating_2_count")
+  rating3Count       Int      @default(0) @map("rating_3_count")
+  rating4Count       Int      @default(0) @map("rating_4_count")
+  rating5Count       Int      @default(0) @map("rating_5_count")
+  updatedAt          DateTime @updatedAt
+
+  dishAtRestaurant DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([dishAtRestaurantId, rollupDate])
+  @@index([rollupDate])
+  @@map("daily_rollup")
+}
+
+// Retention config: controls cold-data archival behavior
+model RetentionConfig {
+  id                 String   @id @default("singleton")
+  keepRawDays        Int      @default(90)   // Keep full review text for N days
+  archiveEnabled     Boolean  @default(false) // Enable cold-data archival
+  archiveDestination String   @default("none") // "none" | "file" | "s3"
+  warnAtPct          Float    @default(70.0)  // Warn when DB usage hits this %
+  criticalAtPct      Float    @default(85.0)  // Critical alert threshold
+  maxStorageMb       Float    @default(512.0) // 0.5 GB = 512 MB
+  updatedAt          DateTime @updatedAt
+
+  @@map("retention_config")
+}
+
+// DB health snapshot log — written by the health-check endpoint/cron
+model DbHealthSnapshot {
+  id              String   @id @default(cuid())
+  totalSizeMb     Float
+  tableSizesJson  String   @db.Text // JSON: { tableName: sizeMb }
+  indexSizesJson  String   @db.Text // JSON: { indexName: sizeMb }
+  usagePct        Float    // % of maxStorageMb
+  status          String   // "ok" | "warn" | "critical"
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@map("db_health_snapshot")
 }
