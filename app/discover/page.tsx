@@ -95,6 +95,22 @@ export default function DiscoverPage() {
   const [error, setError] = useState<string | null>(null);
   const [dishResults, setDishResults] = useState<DishResult[]>([]);
   const [dishLoading, setDishLoading] = useState(false);
+
+  /* suggestion dropdown state */
+  const [rSuggestions, setRSuggestions] = useState<Array<{ id: string; name: string; city: string | null; state: string | null; similarity: number; dishCount: number }>>([]);
+  const [lSuggestions, setLSuggestions] = useState<Array<{ id: string; city: string | null; address: string | null; state: string | null; matchedField: string; name: string }>>([]);
+  const [dSuggestions, setDSuggestions] = useState<DishResult[]>([]);
+  const [showRSug, setShowRSug] = useState(false);
+  const [showLSug, setShowLSug] = useState(false);
+  const [showDSug, setShowDSug] = useState(false);
+  const [rSugLoading, setRSugLoading] = useState(false);
+  const [lSugLoading, setLSugLoading] = useState(false);
+
+  const rBoxRef = useRef<HTMLDivElement>(null);
+  const lBoxRef = useRef<HTMLDivElement>(null);
+  const dBoxRef = useRef<HTMLDivElement>(null);
+  const rTimer = useRef<NodeJS.Timeout | null>(null);
+  const lTimer = useRef<NodeJS.Timeout | null>(null);
   const dTimer = useRef<NodeJS.Timeout | null>(null);
   const initialSearchDone = useRef(false);
   const listContainerRef = useRef<HTMLDivElement>(null);
@@ -179,23 +195,83 @@ export default function DiscoverPage() {
     }
   };
 
-  // Dish search via pg_trgm (independent of map/OSM)
-  const searchDishes = useCallback(async (q: string) => {
-    if (!q || q.length < 2) { setDishResults([]); return; }
+  // Close suggestion dropdowns on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (rBoxRef.current && !rBoxRef.current.contains(e.target as Node)) setShowRSug(false);
+      if (lBoxRef.current && !lBoxRef.current.contains(e.target as Node)) setShowLSug(false);
+      if (dBoxRef.current && !dBoxRef.current.contains(e.target as Node)) setShowDSug(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Suggestion fetchers
+  const fetchRSuggestions = useCallback(async (q: string) => {
+    if (!q || q.length < 1) { setRSuggestions([]); return; }
+    setRSugLoading(true);
+    try {
+      const res = await fetch(`/api/search/restaurants?q=${encodeURIComponent(q)}`);
+      if (res.ok) { const d = await res.json(); setRSuggestions(d.results?.slice(0, 6) ?? []); setShowRSug(true); }
+    } catch { /* ignore */ } finally { setRSugLoading(false); }
+  }, []);
+
+  const fetchLSuggestions = useCallback(async (q: string) => {
+    if (!q || q.length < 1) { setLSuggestions([]); return; }
+    setLSugLoading(true);
+    try {
+      const res = await fetch(`/api/search/locations?q=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const d = await res.json();
+        const seen = new Set<string>();
+        const unique: typeof lSuggestions = [];
+        for (const r of d.results ?? []) {
+          const key = `${r.city ?? ''}-${r.state ?? ''}`;
+          if (!seen.has(key)) { seen.add(key); unique.push(r); }
+          if (unique.length >= 6) break;
+        }
+        setLSuggestions(unique);
+        setShowLSug(true);
+      }
+    } catch { /* ignore */ } finally { setLSugLoading(false); }
+  }, []);
+
+  const fetchDSuggestions = useCallback(async (q: string) => {
+    if (!q || q.length < 1) { setDSuggestions([]); return; }
     setDishLoading(true);
     try {
       const res = await fetch(`/api/search/dishes?q=${encodeURIComponent(q)}`);
-      if (res.ok) { const data = await res.json(); setDishResults(data.results ?? []); }
+      if (res.ok) {
+        const d = await res.json();
+        setDSuggestions(d.results?.slice(0, 6) ?? []);
+        setDishResults(d.results ?? []);
+        setShowDSug(true);
+      }
     } catch { /* ignore */ } finally { setDishLoading(false); }
   }, []);
+
+  const onRestaurantInput = (v: string) => {
+    setRestaurantQuery(v);
+    if (rTimer.current) clearTimeout(rTimer.current);
+    rTimer.current = setTimeout(() => fetchRSuggestions(v), 300);
+  };
+  const onLocationInput = (v: string) => {
+    setLocationQuery(v);
+    if (lTimer.current) clearTimeout(lTimer.current);
+    lTimer.current = setTimeout(() => fetchLSuggestions(v), 300);
+  };
 
   const onDishInput = (v: string) => {
     setDishQuery(v);
     if (dTimer.current) clearTimeout(dTimer.current);
-    dTimer.current = setTimeout(() => searchDishes(v), 350);
+    dTimer.current = setTimeout(() => fetchDSuggestions(v), 300);
   };
 
-  const handleSearch = () => doSearch(userLocation, restaurantQuery, locationQuery, radius);
+  const handleSearch = () => {
+    doSearch(userLocation, restaurantQuery, locationQuery, radius);
+    if (dishQuery.trim()) fetchDSuggestions(dishQuery.trim());
+    setShowRSug(false); setShowLSug(false); setShowDSug(false);
+  };
 
   const mapRestaurants: MapRestaurant[] = results.map((r, i) => ({
     id: r.osmId || `osm-${i}`,
@@ -246,60 +322,107 @@ export default function DiscoverPage() {
         <div className="mb-6 bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
             {/* Restaurant name search */}
-            <div className="md:col-span-3">
+            <div ref={rBoxRef} className="md:col-span-3 relative">
               <label className="block text-xs font-medium text-gray-500 mb-1">🏪 Restaurant</label>
               <div className="relative">
                 <input
                   type="text"
                   value={restaurantQuery}
-                  onChange={(e) => setRestaurantQuery(e.target.value)}
+                  onChange={(e) => onRestaurantInput(e.target.value)}
+                  onFocus={() => rSuggestions.length > 0 && setShowRSug(true)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   placeholder="e.g. Pizza Hut..."
                   className="w-full px-3 py-2.5 pr-7 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 text-gray-900 outline-none text-sm"
                 />
                 {restaurantQuery && (
-                  <button onClick={() => setRestaurantQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                  <button onClick={() => { setRestaurantQuery(''); setRSuggestions([]); setShowRSug(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
                 )}
+                {rSugLoading && <span className="absolute right-7 top-1/2 -translate-y-1/2 w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />}
               </div>
+              {showRSug && rSuggestions.length > 0 && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {rSuggestions.map((s) => (
+                    <button key={s.id} onClick={() => { setRestaurantQuery(s.name); setShowRSug(false); }}
+                      className="w-full text-left px-3 py-2 hover:bg-green-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-b-0 text-sm">
+                      <div className="min-w-0">
+                        <span className="font-medium text-gray-900 truncate block">{s.name}</span>
+                        {s.city && <span className="text-[11px] text-gray-400">{s.city}{s.state ? `, ${s.state}` : ''}</span>}
+                      </div>
+                      {s.dishCount > 0 && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded shrink-0">{s.dishCount} dish{s.dishCount > 1 ? 'es' : ''}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Location search */}
-            <div className="md:col-span-3">
+            <div ref={lBoxRef} className="md:col-span-3 relative">
               <label className="block text-xs font-medium text-gray-500 mb-1">📍 Location</label>
               <div className="relative">
                 <input
                   type="text"
                   value={locationQuery}
-                  onChange={(e) => setLocationQuery(e.target.value)}
+                  onChange={(e) => onLocationInput(e.target.value)}
+                  onFocus={() => lSuggestions.length > 0 && setShowLSug(true)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   placeholder="City, address, zip..."
                   className="w-full px-3 py-2.5 pr-7 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 outline-none text-sm"
                 />
                 {locationQuery && (
-                  <button onClick={() => setLocationQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                  <button onClick={() => { setLocationQuery(''); setLSuggestions([]); setShowLSug(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
                 )}
+                {lSugLoading && <span className="absolute right-7 top-1/2 -translate-y-1/2 w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />}
               </div>
+              {showLSug && lSuggestions.length > 0 && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {lSuggestions.map((s, i) => (
+                    <button key={`${s.id}-${i}`} onClick={() => { setLocationQuery(s.city ?? s.address ?? s.state ?? ''); setShowLSug(false); }}
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-b-0 text-sm">
+                      <div className="min-w-0">
+                        <span className="font-medium text-gray-900 truncate block">{s.city ?? s.address ?? s.state ?? ''}</span>
+                        <span className="text-[11px] text-gray-400">{s.name}</span>
+                      </div>
+                      <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">{s.matchedField}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {userLocation && !locationQuery && (
                 <p className="text-[10px] text-gray-400 mt-0.5">Leave empty for GPS</p>
               )}
             </div>
 
             {/* Dish search (fuzzy, independent) */}
-            <div className="md:col-span-2">
+            <div ref={dBoxRef} className="md:col-span-2 relative">
               <label className="block text-xs font-medium text-gray-500 mb-1">🍴 Dish</label>
               <div className="relative">
                 <input
                   type="text"
                   value={dishQuery}
                   onChange={(e) => onDishInput(e.target.value)}
+                  onFocus={() => dSuggestions.length > 0 && setShowDSug(true)}
                   placeholder="Biryani, pizza..."
                   className="w-full px-3 py-2.5 pr-7 rounded-lg border border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900 outline-none text-sm"
                 />
                 {dishQuery && (
-                  <button onClick={() => { setDishQuery(''); setDishResults([]); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                  <button onClick={() => { setDishQuery(''); setDishResults([]); setDSuggestions([]); setShowDSug(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
                 )}
                 {dishLoading && <span className="absolute right-7 top-1/2 -translate-y-1/2 w-3 h-3 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />}
               </div>
+              {showDSug && dSuggestions.length > 0 && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {dSuggestions.map((s) => (
+                    <button key={s.id} onClick={() => { setDishQuery(s.dishName); setShowDSug(false); }}
+                      className="w-full text-left px-3 py-2 hover:bg-orange-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-b-0 text-sm">
+                      <div className="min-w-0">
+                        <span className="font-medium text-gray-900 truncate block">{s.dishName}</span>
+                        <span className="text-[11px] text-gray-400">at {s.restaurantName}{s.city ? ` · ${s.city}` : ''}</span>
+                      </div>
+                      {s.cuisine && <span className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded shrink-0">{s.cuisine}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Radius */}

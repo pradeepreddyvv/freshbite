@@ -73,14 +73,14 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*)::INT FROM "DishAtRestaurant" d WHERE d."restaurantId" = r."id") AS dish_count
       FROM "Restaurant" r
       WHERE
-        similarity(r."city", ${q}) > 0.15
-        OR similarity(r."address", ${q}) > 0.15
-        OR similarity(r."state", ${q}) > 0.15
+        similarity(r."city", ${q}) > 0.1
+        OR similarity(r."address", ${q}) > 0.1
+        OR similarity(r."state", ${q}) > 0.1
         OR r."city" ILIKE '%' || ${q} || '%'
         OR r."address" ILIKE '%' || ${q} || '%'
         OR r."state" ILIKE '%' || ${q} || '%'
       ORDER BY best_sim DESC, r."name" ASC
-      LIMIT 30
+      LIMIT 50
     `;
 
     const results: LocationSearchResult[] = rows.map((r) => {

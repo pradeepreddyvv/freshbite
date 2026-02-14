@@ -67,12 +67,12 @@ export async function GET(request: NextRequest) {
       JOIN "Dish" d ON d."id" = dar."dishId"
       JOIN "Restaurant" r ON r."id" = dar."restaurantId"
       WHERE
-        similarity(d."name", ${q}) > 0.12
-        OR similarity(d."cuisine", ${q}) > 0.15
+        similarity(d."name", ${q}) > 0.08
+        OR similarity(d."cuisine", ${q}) > 0.1
         OR d."name" ILIKE '%' || ${q} || '%'
         OR d."cuisine" ILIKE '%' || ${q} || '%'
       ORDER BY best_sim DESC, d."name" ASC
-      LIMIT 20
+      LIMIT 30
     `;
 
     const results: DishSearchResult[] = rows.map((r) => ({
