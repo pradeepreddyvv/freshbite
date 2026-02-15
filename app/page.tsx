@@ -32,6 +32,18 @@ interface NearbyRestaurant {
   freshbiteId: string | null;
 }
 
+interface NearbyCachePayload {
+  latBucket: string;
+  lngBucket: string;
+  radius: number;
+  savedAt: number;
+  restaurants: NearbyRestaurant[];
+}
+
+const NEARBY_CACHE_KEY = 'freshbite.nearby.v1';
+const NEARBY_RADIUS_M = 20000;
+const NEARBY_CACHE_TTL_MS = 15 * 60 * 1000;
+
 interface LocationResult {
   id: string;
   name: string;
@@ -176,6 +188,70 @@ export default function HomePage() {
   };
   const pickD = (name: string) => { setDishQuery(name); setShowDSug(false); };
 
+  const toLocationBucket = (n: number) => n.toFixed(3);
+
+  const toNearbyRestaurantResult = useCallback((nr: NearbyRestaurant): RestaurantResult => ({
+    id: nr.freshbiteId || `osm-${nr.osmId}`,
+    name: nr.name,
+    city: nr.city,
+    address: nr.address,
+    state: nr.state,
+    latitude: nr.latitude,
+    longitude: nr.longitude,
+    similarity: 1,
+    dishCount: 0,
+    distanceKm: nr.distanceKm,
+  }), []);
+
+  const mergeRestaurantResults = useCallback((
+    primary: RestaurantResult[],
+    secondary: RestaurantResult[],
+  ): RestaurantResult[] => {
+    const seen = new Set<string>();
+    const out: RestaurantResult[] = [];
+
+    for (const r of primary) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        out.push(r);
+      }
+    }
+    for (const r of secondary) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        out.push(r);
+      }
+    }
+    return out;
+  }, []);
+
+  const mergeNearbyLists = useCallback((
+    current: NearbyRestaurant[],
+    incoming: NearbyRestaurant[],
+  ): NearbyRestaurant[] => {
+    const map = new Map<string, NearbyRestaurant>();
+    for (const r of current) {
+      map.set(r.freshbiteId || `osm-${r.osmId}`, r);
+    }
+    for (const r of incoming) {
+      const key = r.freshbiteId || `osm-${r.osmId}`;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, r);
+        continue;
+      }
+      // Prefer existing DB-enriched source, but keep freshest distance if present.
+      map.set(key, {
+        ...existing,
+        distanceKm: existing.distanceKm ?? r.distanceKm,
+        source: existing.source === 'freshbite' ? existing.source : r.source,
+      });
+    }
+    return Array.from(map.values())
+      .sort((a, b) => (a.distanceKm ?? 99999) - (b.distanceKm ?? 99999))
+      .slice(0, 100);
+  }, []);
+
   /* ── SEARCH button → fire actual queries ── */
   const doSearch = useCallback(async () => {
     setSearching(true);
@@ -184,13 +260,26 @@ export default function HomePage() {
     setShowDSug(false);
 
     const promises: Promise<void>[] = [];
+    const normalizedRestaurantQuery = restaurantQuery.trim().toLowerCase();
+    const normalizedLocationQuery = locationQuery.trim();
 
     // Restaurant search
     if (restaurantQuery.trim().length >= 1) {
       promises.push(
         fetch(`/api/search/restaurants?q=${encodeURIComponent(restaurantQuery.trim())}`)
           .then(r => r.ok ? r.json() : { results: [] })
-          .then(d => setRestaurantResults(d.results ?? []))
+          .then(d => {
+            const apiResults = d.results ?? [];
+            // Also search within current nearby (cached 100) before network-only results.
+            const localNearbyMatches = nearbyRestaurants
+              .filter((nr) => {
+                const haystack = [nr.name, nr.address, nr.city, nr.state].filter(Boolean).join(' ').toLowerCase();
+                return haystack.includes(normalizedRestaurantQuery);
+              })
+              .map(toNearbyRestaurantResult);
+
+            setRestaurantResults(mergeRestaurantResults(apiResults, localNearbyMatches));
+          })
           .catch(() => {})
       );
     } else {
@@ -217,6 +306,29 @@ export default function HomePage() {
         fetch(`/api/search/locations?q=${encodeURIComponent(locationQuery.trim())}`)
           .then(r => r.ok ? r.json() : { results: [] })
           .then(d => setLocationResults(d.results ?? []))
+          .catch(() => {})
+      );
+
+      // If user searched a location, hit discover with that location text
+      // and merge into current nearby + restaurant list.
+      promises.push(
+        fetch(`/api/discover?location=${encodeURIComponent(normalizedLocationQuery)}&radius=${NEARBY_RADIUS_M}&limit=100`)
+          .then(r => r.ok ? r.json() : { restaurants: [] })
+          .then((d) => {
+            const discovered: NearbyRestaurant[] = (d.restaurants ?? []).slice(0, 100);
+
+            if (typeof d.centerLat === 'number' && typeof d.centerLng === 'number') {
+              setUserLat(d.centerLat);
+              setUserLng(d.centerLng);
+              setLocationStatus('granted');
+            }
+
+            if (discovered.length > 0) {
+              setNearbyRestaurants((prev) => mergeNearbyLists(prev, discovered));
+              const discoveredAsResults = discovered.map(toNearbyRestaurantResult);
+              setRestaurantResults((prev) => mergeRestaurantResults(prev, discoveredAsResults));
+            }
+          })
           .catch(() => {})
       );
     } else {
@@ -251,7 +363,15 @@ export default function HomePage() {
 
     await Promise.all(promises);
     setSearching(false);
-  }, [restaurantQuery, locationQuery, dishQuery]);
+  }, [
+    restaurantQuery,
+    locationQuery,
+    dishQuery,
+    nearbyRestaurants,
+    toNearbyRestaurantResult,
+    mergeRestaurantResults,
+    mergeNearbyLists,
+  ]);
 
   /* ── initial load (all restaurants + dishes + nearby via geolocation) ── */
   useEffect(() => {
@@ -288,7 +408,7 @@ export default function HomePage() {
       } catch { /* ignore */ } finally { setInitialLoaded(true); }
     })();
 
-    // Request geolocation and fetch nearby restaurants
+    // Request geolocation and fetch nearby restaurants (with local cache by location bucket)
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       setLocationStatus('loading');
       navigator.geolocation.getCurrentPosition(
@@ -298,12 +418,41 @@ export default function HomePage() {
           setUserLat(lat);
           setUserLng(lng);
           setLocationStatus('granted');
+
+          const latBucket = toLocationBucket(lat);
+          const lngBucket = toLocationBucket(lng);
+
+          try {
+            const raw = localStorage.getItem(NEARBY_CACHE_KEY);
+            if (raw) {
+              const cached = JSON.parse(raw) as NearbyCachePayload;
+              const isSameLocation = cached.latBucket === latBucket && cached.lngBucket === lngBucket;
+              const isFresh = Date.now() - cached.savedAt < NEARBY_CACHE_TTL_MS;
+              if (isSameLocation && isFresh && Array.isArray(cached.restaurants)) {
+                setNearbyRestaurants(cached.restaurants.slice(0, 100));
+                return;
+              }
+            }
+          } catch {
+            // ignore cache errors and continue with network fetch
+          }
+
           setNearbyLoading(true);
           try {
-            const res = await fetch(`/api/discover?lat=${lat}&lng=${lng}&radius=20000&limit=100`);
+            const res = await fetch(`/api/discover?lat=${lat}&lng=${lng}&radius=${NEARBY_RADIUS_M}&limit=100`);
             if (res.ok) {
               const data = await res.json();
-              setNearbyRestaurants(data.restaurants ?? []);
+              const restaurants: NearbyRestaurant[] = (data.restaurants ?? []).slice(0, 100);
+              setNearbyRestaurants(restaurants);
+
+              const payload: NearbyCachePayload = {
+                latBucket,
+                lngBucket,
+                radius: NEARBY_RADIUS_M,
+                savedAt: Date.now(),
+                restaurants,
+              };
+              localStorage.setItem(NEARBY_CACHE_KEY, JSON.stringify(payload));
             }
           } catch { /* ignore */ } finally { setNearbyLoading(false); }
         },
