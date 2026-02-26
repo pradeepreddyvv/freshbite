@@ -11,6 +11,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "::error::SITE_URL secret is not set. Please add it to your repository secrets."
+            echo "Example: https://your-app.vercel.app"
+            exit 1
+          fi
+          if [ -z "${{ secrets.ALERTS_SECRET_TOKEN }}" ]; then
+            echo "::error::ALERTS_SECRET_TOKEN secret is not set. Please add it to your repository secrets."
+            exit 1
+          fi
+          echo "✅ All required secrets are configured"
+          echo "Site URL: ${{ secrets.SITE_URL }}"
+
       - name: Refresh daily rollups (last 3 days)
         run: |
           curl -X POST "${{ secrets.SITE_URL }}/api/maintenance/rollup?days=3" \

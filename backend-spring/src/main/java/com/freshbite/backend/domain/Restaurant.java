@@ -35,6 +35,9 @@ public class Restaurant {
 
   private Double longitude;
 
+  @Column(name = "osm_place_id", unique = true)
+  private String osmPlaceId;
+
   @CreationTimestamp
   @Column(name = "\"createdAt\"")
   private Instant createdAt;
@@ -121,5 +124,13 @@ public class Restaurant {
 
   public void setLongitude(Double longitude) {
     this.longitude = longitude;
+  }
+
+  public String getOsmPlaceId() {
+    return osmPlaceId;
+  }
+
+  public void setOsmPlaceId(String osmPlaceId) {
+    this.osmPlaceId = osmPlaceId;
   }
 }

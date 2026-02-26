@@ -13,10 +13,17 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "kafka:consumer": "tsx scripts/kafka-consumer.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration"
   },
   "dependencies": {
     "@prisma/client": "^5.9.1",
+    "ioredis": "^5.9.3",
+    "kafkajs": "^2.2.4",
     "maplibre-gl": "^5.17.0",
     "next": "^14.1.0",
     "react": "^18.2.0",
@@ -24,19 +31,26 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/ioredis": "^4.28.10",
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.17",
+    "dotenv": "^17.3.1",
     "eslint": "^8.56.0",
     "eslint-config-next": "^14.1.0",
     "postcss": "^8.4.33",
     "prisma": "^5.9.1",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

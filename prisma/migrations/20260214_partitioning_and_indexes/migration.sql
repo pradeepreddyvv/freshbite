@@ -86,13 +86,9 @@ CREATE INDEX IF NOT EXISTS "Review_dishAtRestaurantId_createdAt_idx"
 CREATE INDEX IF NOT EXISTS "Review_createdAt_brin_idx"
   ON "Review" USING BRIN ("createdAt");
 
--- Partial index: only recent reviews (last 45 days)
--- This keeps the index small while accelerating the most frequent queries
--- NOTE: This index must be periodically rebuilt (via maintenance cron)
--- to slide the window forward. We'll drop+recreate in the maintenance script.
-CREATE INDEX IF NOT EXISTS "Review_recent_45d_idx"
-  ON "Review" ("dishAtRestaurantId", "createdAt" DESC)
-  WHERE "createdAt" > (CURRENT_TIMESTAMP - INTERVAL '45 days');
+-- Partial index removed: CURRENT_TIMESTAMP is non-immutable,
+-- PostgreSQL does not allow it in index predicates.
+-- The composite B-tree index above handles recent-review queries efficiently.
 
 -- ── 6. Partition helper function ────────────────────────────
 -- Creates a monthly partition for the Review table if partitioning is enabled.

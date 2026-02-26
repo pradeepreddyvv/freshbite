@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getDishReviews } from '@/lib/dish-service';
 import { isValidTimeWindow, normalizeTimeWindow } from '@/lib/time-window';
 import { withLogging } from '@/lib/logger';
+import { publishReview } from '@/lib/kafka';
 
 const log = withLogging('/api/dish/[id]/reviews');
 
@@ -90,6 +91,24 @@ export async function POST(
     }
 
     // Create review with server-generated UTC timestamp
+    // Try Kafka first for async processing; fall back to direct DB write
+    const kafkaPublished = await publishReview({
+      dishAtRestaurantId: id,
+      rating,
+      text,
+      visitedAt,
+      submittedAt: new Date().toISOString(),
+    });
+
+    if (kafkaPublished) {
+      ctx.success(202, { dishId: id, rating, via: 'kafka' });
+      return NextResponse.json(
+        { accepted: true, message: 'Review accepted and queued for processing' },
+        { status: 202 },
+      );
+    }
+
+    // Fallback: write directly to DB when Kafka is unavailable
     const review = await prisma.review.create({
       data: {
         dishAtRestaurantId: id,

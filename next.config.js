@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  transpilePackages: ['maplibre-gl'],
 
   // Proxy Spring Boot API calls through Vercel to avoid mixed-content (HTTPS→HTTP)
   // and CORS issues. Fallback rewrites only trigger when no Next.js API route matches.

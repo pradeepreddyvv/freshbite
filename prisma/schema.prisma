@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
@@ -11,22 +8,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// CORE MODELS
-
 model Restaurant {
-  id          String   @id @default(cuid())
-  osmPlaceId  String?  @unique @map("osm_place_id") // OSM place_id — dedup key
-  name        String
-  address     String?
-  city        String?
-  state       String?
-  country     String   @default("USA")
-  timezone    String   @default("America/Los_Angeles") // IANA timezone for future meal slot derivation
-  latitude    Float?
-  longitude   Float?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  id                 String             @id @default(cuid())
+  name               String
+  address            String?
+  city               String?
+  state              String?
+  country            String             @default("USA")
+  timezone           String             @default("America/Los_Angeles")
+  latitude           Float?
+  longitude          Float?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  osmPlaceId         String?            @unique @map("osm_place_id")
   dishesAtRestaurant DishAtRestaurant[]
 
   @@index([city])
@@ -34,136 +28,112 @@ model Restaurant {
 }
 
 model Dish {
-  id          String   @id @default(cuid())
-  name        String
-  cuisine     String?
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  id                 String             @id @default(cuid())
+  name               String
+  cuisine            String?
+  description        String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
   dishesAtRestaurant DishAtRestaurant[]
 
   @@index([name])
 }
 
-// First-class entity: dish AT a specific restaurant location
 model DishAtRestaurant {
-  id           String   @id @default(cuid())
+  id           String              @id @default(cuid())
   restaurantId String
   dishId       String
   price        Float?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  dish       Dish       @relation(fields: [dishId], references: [id], onDelete: Cascade)
-  reviews    Review[]
-  alerts     AlertSubscription[]
-  rollups    DailyRollup[]
+  isActive     Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  alerts       AlertSubscription[]
+  dish         Dish                @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  reviews      Review[]
+  rollups      DailyRollup[]
 
   @@unique([restaurantId, dishId])
   @@index([restaurantId])
   @@index([dishId])
 }
 
-// Append-only log: NEVER deleted
 model Review {
-  id                  String    @id @default(cuid())
-  dishAtRestaurantId  String
-  rating              Int // 1-5
-  text                String
-  createdAt           DateTime  @default(now()) // Always UTC
-  visitedAt           DateTime? // Optional: when the user actually ate there
-  mealSlot            MealSlot? // V2: breakfast, lunch, dinner, late_night (derived from createdAt + restaurant timezone)
+  id                 String           @id @default(cuid())
+  dishAtRestaurantId String
+  rating             Int
+  text               String
+  createdAt          DateTime         @default(now())
+  mealSlot           MealSlot?
+  visitedAt          DateTime?
+  dishAtRestaurant   DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
 
-  dishAtRestaurant DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
-
-  // CRITICAL INDEX: time-window queries
   @@index([dishAtRestaurantId, createdAt(sort: Desc)])
   @@index([createdAt])
+  @@index([dishAtRestaurantId, createdAt(sort: Desc)], map: "Review_recent_combined_idx")
 }
 
-enum MealSlot {
-  BREAKFAST  // 5am-11am
-  LUNCH      // 11am-3pm
-  DINNER     // 3pm-10pm
-  LATE_NIGHT // 10pm-5am
-}
-
-// V2+ Feature: Alert subscriptions (stub for MVP)
 model AlertSubscription {
-  id                 String   @id @default(cuid())
+  id                 String           @id @default(cuid())
   dishAtRestaurantId String
-  email              String? // For future email notifications
-  phone              String? // For future SMS notifications
-  window             String   @default("24h") // 24h, 48h, 5d
-  minRating          Float    @default(3.0) // Alert if avg drops below this
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  dishAtRestaurant DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
+  email              String?
+  phone              String?
+  window             String           @default("24h")
+  minRating          Float            @default(3.0)
+  isActive           Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  dishAtRestaurant   DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
 
   @@index([dishAtRestaurantId])
   @@index([isActive])
 }
 
-// ── STORAGE OPTIMIZATION MODELS ────────────────────────────
-
-// Daily rollup: pre-aggregated stats per dishAtRestaurant per day
-// Used by summary/stats endpoints for >= 48h windows to avoid scanning raw reviews
 model DailyRollup {
-  id                 String   @id @default(cuid())
+  id                 String           @id @default(cuid())
   dishAtRestaurantId String
-  rollupDate         DateTime @db.Date // The calendar date (UTC) this rollup covers
-  reviewCount        Int      @default(0)
-  ratingSum          Int      @default(0) // sum of ratings for avg calculation
-  rating1Count       Int      @default(0) @map("rating_1_count")
-  rating2Count       Int      @default(0) @map("rating_2_count")
-  rating3Count       Int      @default(0) @map("rating_3_count")
-  rating4Count       Int      @default(0) @map("rating_4_count")
-  rating5Count       Int      @default(0) @map("rating_5_count")
-  updatedAt          DateTime @updatedAt
-
-  dishAtRestaurant DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
+  rollupDate         DateTime         @db.Date
+  reviewCount        Int              @default(0)
+  ratingSum          Int              @default(0)
+  rating1Count       Int              @default(0) @map("rating_1_count")
+  rating2Count       Int              @default(0) @map("rating_2_count")
+  rating3Count       Int              @default(0) @map("rating_3_count")
+  rating4Count       Int              @default(0) @map("rating_4_count")
+  rating5Count       Int              @default(0) @map("rating_5_count")
+  updatedAt          DateTime         @updatedAt
+  dishAtRestaurant   DishAtRestaurant @relation(fields: [dishAtRestaurantId], references: [id], onDelete: Cascade)
 
   @@unique([dishAtRestaurantId, rollupDate])
   @@index([rollupDate])
   @@map("daily_rollup")
 }
 
-// Retention config: controls cold-data archival behavior
 model RetentionConfig {
   id                 String   @id @default("singleton")
-  keepRawDays        Int      @default(90)   // Keep full review text for N days
-  archiveEnabled     Boolean  @default(false) // Enable cold-data archival
-  archiveDestination String   @default("none") // "none" | "file" | "s3"
-  warnAtPct          Float    @default(70.0)  // Warn when DB usage hits this %
-  criticalAtPct      Float    @default(85.0)  // Critical alert threshold
-  maxStorageMb       Float    @default(512.0) // 0.5 GB = 512 MB
+  keepRawDays        Int      @default(90)
+  archiveEnabled     Boolean  @default(false)
+  archiveDestination String   @default("none")
+  warnAtPct          Float    @default(70.0)
+  criticalAtPct      Float    @default(85.0)
+  maxStorageMb       Float    @default(512.0)
   updatedAt          DateTime @updatedAt
 
   @@map("retention_config")
 }
 
-// DB health snapshot log — written by the health-check endpoint/cron
 model DbHealthSnapshot {
-  id              String   @id @default(cuid())
-  totalSizeMb     Float
-  tableSizesJson  String   @db.Text // JSON: { tableName: sizeMb }
-  indexSizesJson  String   @db.Text // JSON: { indexName: sizeMb }
-  usagePct        Float    // % of maxStorageMb
-  status          String   // "ok" | "warn" | "critical"
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  totalSizeMb    Float
+  tableSizesJson String
+  indexSizesJson String
+  usagePct       Float
+  status         String
+  createdAt      DateTime @default(now())
 
   @@index([createdAt(sort: Desc)])
   @@map("db_health_snapshot")
 }
 
-// ── USAGE ANALYTICS ───────────────────────────────────────
-
-// Append-only page view events (audit trail)
 model PageVisit {
   id        String   @id @default(cuid())
   path      String
@@ -177,7 +147,6 @@ model PageVisit {
   @@map("page_visit")
 }
 
-// Fast counters for dashboard/API reads
 model PageVisitCounter {
   path           String   @id
   totalViews     Int      @default(0)
@@ -186,4 +155,11 @@ model PageVisitCounter {
   updatedAt      DateTime @updatedAt
 
   @@map("page_visit_counter")
+}
+
+enum MealSlot {
+  BREAKFAST
+  LUNCH
+  DINNER
+  LATE_NIGHT
 }

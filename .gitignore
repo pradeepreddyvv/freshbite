@@ -66,3 +66,4 @@ ssl/
 # Postman environments (may contain secrets/IPs)
 *.postman_environment.json
 postman/
+.claude/

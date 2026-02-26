@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 interface DishHeaderProps {
   dishName: string;
   restaurantName: string;
-  address: string;
-  city: string;
+  address?: string | null;
+  city?: string | null;
   cuisine?: string | null;
   description?: string | null;
   price?: number | null;
@@ -15,8 +15,8 @@ interface DishHeaderProps {
 export function DishHeader({
   dishName,
   restaurantName,
-  address,
-  city,
+  address = '',
+  city = '',
   cuisine,
   description,
   price,

@@ -69,6 +69,14 @@ interface DishResult {
   reviewCount: number;
 }
 
+interface GooglePlaceSuggestion {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+  types: string[];
+}
+
 /* ── component ── */
 export default function HomePage() {
   /* ── search input state ── */
@@ -77,8 +85,8 @@ export default function HomePage() {
   const [dishQuery, setDishQuery] = useState('');
 
   /* ── suggestion dropdowns (populated while typing) ── */
-  const [rSuggestions, setRSuggestions] = useState<RestaurantResult[]>([]);
-  const [lSuggestions, setLSuggestions] = useState<LocationResult[]>([]);
+  const [rSuggestions, setRSuggestions] = useState<GooglePlaceSuggestion[]>([]);
+  const [lSuggestions, setLSuggestions] = useState<GooglePlaceSuggestion[]>([]);
   const [dSuggestions, setDSuggestions] = useState<DishResult[]>([]);
   const [showRSug, setShowRSug] = useState(false);
   const [showLSug, setShowLSug] = useState(false);
@@ -122,36 +130,28 @@ export default function HomePage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  /* ── suggestion fetchers (lightweight, for dropdowns only) ── */
+  /* ── suggestion fetchers (Google Places Autocomplete) ── */
   const fetchRSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 1) { setRSuggestions([]); return; }
     setRSugLoading(true);
     try {
-      const res = await fetch(`/api/search/restaurants?q=${encodeURIComponent(q)}`);
-      if (res.ok) { const d = await res.json(); setRSuggestions(d.results?.slice(0, 6) ?? []); setShowRSug(true); }
+      const params = new URLSearchParams({ input: q, types: 'establishment' });
+      if (userLat != null && userLng != null) { params.set('lat', String(userLat)); params.set('lng', String(userLng)); }
+      const res = await fetch(`/api/search/google-places?${params}`);
+      if (res.ok) { const d = await res.json(); setRSuggestions(d.predictions?.slice(0, 6) ?? []); setShowRSug(true); }
     } catch { /* ignore */ } finally { setRSugLoading(false); }
-  }, []);
+  }, [userLat, userLng]);
 
   const fetchLSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 1) { setLSuggestions([]); return; }
     setLSugLoading(true);
     try {
-      const res = await fetch(`/api/search/locations?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
-        const d = await res.json();
-        // Deduplicate locations by city+state for cleaner suggestions
-        const seen = new Set<string>();
-        const unique: LocationResult[] = [];
-        for (const r of d.results ?? []) {
-          const key = `${r.city ?? ''}-${r.state ?? ''}-${r.address ?? ''}`;
-          if (!seen.has(key)) { seen.add(key); unique.push(r); }
-          if (unique.length >= 6) break;
-        }
-        setLSuggestions(unique);
-        setShowLSug(true);
-      }
+      const params = new URLSearchParams({ input: q, types: 'geocode' });
+      if (userLat != null && userLng != null) { params.set('lat', String(userLat)); params.set('lng', String(userLng)); }
+      const res = await fetch(`/api/search/google-places?${params}`);
+      if (res.ok) { const d = await res.json(); setLSuggestions(d.predictions?.slice(0, 6) ?? []); setShowLSug(true); }
     } catch { /* ignore */ } finally { setLSugLoading(false); }
-  }, []);
+  }, [userLat, userLng]);
 
   const fetchDSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 1) { setDSuggestions([]); return; }
@@ -180,9 +180,9 @@ export default function HomePage() {
   };
 
   /* ── pick a suggestion → fill the input ── */
-  const pickR = (name: string) => { setRestaurantQuery(name); setShowRSug(false); };
-  const pickL = (loc: LocationResult) => {
-    const label = loc.city ?? loc.address ?? loc.state ?? '';
+  const pickR = (s: GooglePlaceSuggestion) => { setRestaurantQuery(s.mainText); setShowRSug(false); };
+  const pickL = (s: GooglePlaceSuggestion) => {
+    const label = s.mainText || s.description;
     setLocationQuery(label);
     setShowLSug(false);
   };
@@ -659,18 +659,15 @@ export default function HomePage() {
                   <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
                     {rSuggestions.map((s) => (
                       <button
-                        key={s.id}
-                        onClick={() => pickR(s.name)}
+                        key={s.placeId}
+                        onClick={() => pickR(s)}
                         className="w-full text-left px-3 py-2 hover:bg-green-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-b-0"
                       >
                         <div className="min-w-0">
-                          <span className="text-sm font-medium text-gray-900 truncate block">{s.name}</span>
-                          {s.city && <span className="text-[11px] text-gray-400">{s.city}{s.state ? `, ${s.state}` : ''}</span>}
+                          <span className="text-sm font-medium text-gray-900 truncate block">{s.mainText}</span>
+                          <span className="text-[11px] text-gray-400 truncate block">{s.secondaryText}</span>
                         </div>
-                        <div className="shrink-0 flex items-center gap-1.5">
-                          {s.dishCount > 0 && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded">{s.dishCount} dish{s.dishCount > 1 ? 'es' : ''}</span>}
-                          {s.similarity < 1 && <span className="text-[10px] text-gray-400">{Math.round(s.similarity * 100)}%</span>}
-                        </div>
+                        <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded shrink-0">Google</span>
                       </button>
                     ))}
                   </div>
@@ -697,22 +694,17 @@ export default function HomePage() {
                 </div>
                 {showLSug && lSuggestions.length > 0 && (
                   <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-                    {lSuggestions.map((s, i) => (
+                    {lSuggestions.map((s) => (
                       <button
-                        key={`${s.id}-${i}`}
+                        key={s.placeId}
                         onClick={() => pickL(s)}
                         className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-b-0"
                       >
                         <div className="min-w-0">
-                          <span className="text-sm font-medium text-gray-900 truncate block">
-                            {s.city ?? s.address ?? s.state ?? ''}
-                          </span>
-                          <span className="text-[11px] text-gray-400">
-                            {s.matchedField === 'city' ? `${s.state ?? ''}` : s.matchedField === 'address' ? `${s.city ?? ''}, ${s.state ?? ''}` : ''}
-                            {' · '}{s.name}
-                          </span>
+                          <span className="text-sm font-medium text-gray-900 truncate block">{s.mainText}</span>
+                          <span className="text-[11px] text-gray-400 truncate block">{s.secondaryText}</span>
                         </div>
-                        <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">{s.matchedField}</span>
+                        <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">Google</span>
                       </button>
                     ))}
                   </div>
@@ -1025,7 +1017,7 @@ export default function HomePage() {
 
       {/* ── footer ── */}
       <div className="max-w-6xl mx-auto px-4 py-8 text-center text-sm text-gray-400">
-        Built with Next.js, Spring Boot, FastAPI &amp; PostgreSQL · Search powered by pg_trgm
+        Built with Next.js, Spring Boot, FastAPI &amp; PostgreSQL · Search powered by Google Places
       </div>
     </div>
   );

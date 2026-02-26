@@ -24,6 +24,8 @@ import { withLogging } from '@/lib/logger';
 
 const log = withLogging('/api/discover');
 
+const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || 'AIzaSyBsyesckcsLLTIxGg7FeEKpHkJn8DoUZzk';
+
 interface NominatimResult {
   lat: string;
   lon: string;
@@ -69,6 +71,29 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 }
 
 async function geocode(query: string): Promise<{ lat: number; lng: number; displayName: string } | null> {
+  // Try Google Geocoding API first
+  try {
+    const params = new URLSearchParams({
+      address: query,
+      key: GOOGLE_API_KEY,
+    });
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === 'OK' && data.results?.length > 0) {
+        const result = data.results[0];
+        return {
+          lat: result.geometry.location.lat,
+          lng: result.geometry.location.lng,
+          displayName: result.formatted_address,
+        };
+      }
+    }
+  } catch {
+    // Fall through to Nominatim fallback
+  }
+
+  // Fallback to Nominatim
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`;
     const res = await fetch(url, {

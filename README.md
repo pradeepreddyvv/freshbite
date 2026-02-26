@@ -31,6 +31,9 @@ Build a web app where users can review **specific dishes at specific restaurants
 - ✅ **Responsive UI** with Tailwind CSS
 - ✅ **SSR-first** Next.js App Router architecture
 - ✅ **Production-ready** PostgreSQL schema with proper indexes
+- ✅ **Per-page visit counters** (unique + total views)
+- ✅ **Global page tracker** (Next.js client + API)
+- ✅ **API endpoints for analytics**
 
 ### V2 Extensions (Architecture Ready, Stubs Included)
 - 🔜 **Evidence-based chat** (RAG over time-windowed reviews with citations)
@@ -62,6 +65,7 @@ Build a web app where users can review **specific dishes at specific restaurants
 │  • GET  /api/dish/[id]/summary?window=24h                   │
 │  • POST /api/chat           (stub - V2)                     │
 │  • POST /api/alerts/run     (stub - V2)                     │
+│  • POST /api/analytics/pageviews        → Page visit tracking (POST/GET)
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
@@ -75,6 +79,8 @@ Build a web app where users can review **specific dishes at specific restaurants
 │  • DishAtRestaurant    (first-class entity)                 │
 │  • Review              (append-only, never deleted)          │
 │  • AlertSubscription   (stub for V2)                        │
+│  • PageVisit                      │
+│  • PageVisitCounter               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -380,6 +386,51 @@ Questions or issues?
 - Open a GitHub issue
 - Check the [Testing Checklist](#-testing-checklist)
 - Review [Deployment Docs](#-deployment-vercel--neon)
+
+---
+
+## 🧠 AI Agent Project Summary
+
+FreshBite is a Next.js 14 + Prisma + Neon PostgreSQL app for dish reviews, with time-windowed freshness logic and per-page analytics. Key features:
+
+- Dish-specific reviews at restaurant locations
+- Time-windowed queries (last 5 days)
+- Risk labels (Good/Mixed/Risky)
+- Real-time stats
+- Per-page visit counters (unique + total views)
+- Append-only review log
+- Responsive UI (Tailwind)
+- SSR-first architecture
+- Production-ready DB schema
+- API endpoints for reviews, summaries, chat (stub), alerts (stub), analytics
+
+**Data Model:**
+- Restaurant
+- Dish
+- DishAtRestaurant (per-location dish entity)
+- Review (append-only)
+- AlertSubscription (stub)
+- PageVisit (event log)
+- PageVisitCounter (aggregated counters)
+
+**Analytics:**
+- Page views tracked via client-side tracker and API
+- Unique visitors via session cookie
+- Bot traffic ignored
+
+**Deployment:**
+- Vercel (frontend + API)
+- Neon PostgreSQL
+- Prisma ORM
+
+**How to extend:**
+- Add new API endpoints in `app/api/`
+- Add new DB models in `prisma/schema.prisma`
+- Add new client components in `components/`
+- Analytics API is ready for dashboard or admin usage
+
+**Contact:**
+- Open GitHub issue for questions
 
 ---
 

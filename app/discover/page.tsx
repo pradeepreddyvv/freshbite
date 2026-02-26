@@ -75,6 +75,14 @@ interface DishResult {
   reviewCount: number;
 }
 
+interface GooglePlaceSuggestion {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+  types: string[];
+}
+
 export default function DiscoverPage() {
   /* 3 independent search fields */
   const [restaurantQuery, setRestaurantQuery] = useState('');
@@ -97,8 +105,8 @@ export default function DiscoverPage() {
   const [dishLoading, setDishLoading] = useState(false);
 
   /* suggestion dropdown state */
-  const [rSuggestions, setRSuggestions] = useState<Array<{ id: string; name: string; city: string | null; state: string | null; similarity: number; dishCount: number }>>([]);
-  const [lSuggestions, setLSuggestions] = useState<Array<{ id: string; city: string | null; address: string | null; state: string | null; matchedField: string; name: string }>>([]);
+  const [rSuggestions, setRSuggestions] = useState<GooglePlaceSuggestion[]>([]);
+  const [lSuggestions, setLSuggestions] = useState<GooglePlaceSuggestion[]>([]);
   const [dSuggestions, setDSuggestions] = useState<DishResult[]>([]);
   const [showRSug, setShowRSug] = useState(false);
   const [showLSug, setShowLSug] = useState(false);
@@ -206,35 +214,28 @@ export default function DiscoverPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Suggestion fetchers
+  // Suggestion fetchers (Google Places)
   const fetchRSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 1) { setRSuggestions([]); return; }
     setRSugLoading(true);
     try {
-      const res = await fetch(`/api/search/restaurants?q=${encodeURIComponent(q)}`);
-      if (res.ok) { const d = await res.json(); setRSuggestions(d.results?.slice(0, 6) ?? []); setShowRSug(true); }
+      const params = new URLSearchParams({ input: q, types: 'establishment' });
+      if (userLocation) { params.set('lat', String(userLocation.lat)); params.set('lng', String(userLocation.lng)); }
+      const res = await fetch(`/api/search/google-places?${params}`);
+      if (res.ok) { const d = await res.json(); setRSuggestions(d.predictions?.slice(0, 6) ?? []); setShowRSug(true); }
     } catch { /* ignore */ } finally { setRSugLoading(false); }
-  }, []);
+  }, [userLocation]);
 
   const fetchLSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 1) { setLSuggestions([]); return; }
     setLSugLoading(true);
     try {
-      const res = await fetch(`/api/search/locations?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
-        const d = await res.json();
-        const seen = new Set<string>();
-        const unique: typeof lSuggestions = [];
-        for (const r of d.results ?? []) {
-          const key = `${r.city ?? ''}-${r.state ?? ''}`;
-          if (!seen.has(key)) { seen.add(key); unique.push(r); }
-          if (unique.length >= 6) break;
-        }
-        setLSuggestions(unique);
-        setShowLSug(true);
-      }
+      const params = new URLSearchParams({ input: q, types: 'geocode' });
+      if (userLocation) { params.set('lat', String(userLocation.lat)); params.set('lng', String(userLocation.lng)); }
+      const res = await fetch(`/api/search/google-places?${params}`);
+      if (res.ok) { const d = await res.json(); setLSuggestions(d.predictions?.slice(0, 6) ?? []); setShowLSug(true); }
     } catch { /* ignore */ } finally { setLSugLoading(false); }
-  }, []);
+  }, [userLocation]);
 
   const fetchDSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 1) { setDSuggestions([]); return; }
@@ -342,13 +343,13 @@ export default function DiscoverPage() {
               {showRSug && rSuggestions.length > 0 && (
                 <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                   {rSuggestions.map((s) => (
-                    <button key={s.id} onClick={() => { setRestaurantQuery(s.name); setShowRSug(false); }}
+                    <button key={s.placeId} onClick={() => { setRestaurantQuery(s.mainText); setShowRSug(false); }}
                       className="w-full text-left px-3 py-2 hover:bg-green-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-b-0 text-sm">
                       <div className="min-w-0">
-                        <span className="font-medium text-gray-900 truncate block">{s.name}</span>
-                        {s.city && <span className="text-[11px] text-gray-400">{s.city}{s.state ? `, ${s.state}` : ''}</span>}
+                        <span className="font-medium text-gray-900 truncate block">{s.mainText}</span>
+                        <span className="text-[11px] text-gray-400 truncate block">{s.secondaryText}</span>
                       </div>
-                      {s.dishCount > 0 && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded shrink-0">{s.dishCount} dish{s.dishCount > 1 ? 'es' : ''}</span>}
+                      <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded shrink-0">Google</span>
                     </button>
                   ))}
                 </div>
@@ -375,14 +376,14 @@ export default function DiscoverPage() {
               </div>
               {showLSug && lSuggestions.length > 0 && (
                 <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {lSuggestions.map((s, i) => (
-                    <button key={`${s.id}-${i}`} onClick={() => { setLocationQuery(s.city ?? s.address ?? s.state ?? ''); setShowLSug(false); }}
+                  {lSuggestions.map((s) => (
+                    <button key={s.placeId} onClick={() => { setLocationQuery(s.mainText || s.description); setShowLSug(false); }}
                       className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-b-0 text-sm">
                       <div className="min-w-0">
-                        <span className="font-medium text-gray-900 truncate block">{s.city ?? s.address ?? s.state ?? ''}</span>
-                        <span className="text-[11px] text-gray-400">{s.name}</span>
+                        <span className="font-medium text-gray-900 truncate block">{s.mainText}</span>
+                        <span className="text-[11px] text-gray-400 truncate block">{s.secondaryText}</span>
                       </div>
-                      <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">{s.matchedField}</span>
+                      <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">Google</span>
                     </button>
                   ))}
                 </div>
@@ -743,7 +744,7 @@ export default function DiscoverPage() {
         )}
 
         <div className="mt-6 text-center text-xs text-gray-400">
-          Map powered by <strong>OpenStreetMap</strong> · DB search by <strong>pg_trgm</strong> 🌍
+          Map powered by <strong>OpenStreetMap</strong> · Search by <strong>Google Places</strong> 🌍
         </div>
       </div>
     </div>

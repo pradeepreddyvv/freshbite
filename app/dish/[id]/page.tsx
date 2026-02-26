@@ -4,7 +4,9 @@ import { StatsPanel } from '@/components/StatsPanel';
 import { ReviewFeed } from '@/components/ReviewFeed';
 import { ReviewForm } from '@/components/ReviewForm';
 import { ChatPanel } from '@/components/ChatPanel';
+import { VoiceReviewChat } from '@/components/VoiceReviewChat';
 import { normalizeTimeWindow } from '@/lib/time-window';
+import { getDishSummary, getDishReviews } from '@/lib/dish-service';
 import type { TimeWindow } from '@/lib/time-window';
 import type { RiskLevel } from '@/lib/risk-label';
 
@@ -17,74 +19,15 @@ interface PageProps {
   };
 }
 
-interface DishSummaryResponse {
-  dish: {
-    id: string;
-    name: string;
-    cuisine?: string | null;
-    description?: string | null;
-    price?: number | null;
-  };
-  restaurant: {
-    name: string;
-    address: string;
-    city: string;
-  };
-  stats: {
-    avgRating: number | null;
-    reviewCount: number;
-    window: TimeWindow;
-  };
-  risk: {
-    level: RiskLevel;
-    label: string;
-    emoji: string;
-    color: string;
-    bgColor: string;
-  };
-}
-
-interface ReviewListResponse {
-  reviews: Array<{
-    id: string;
-    rating: number;
-    text: string;
-    createdAt: string;
-    mealSlot?: string | null;
-  }>;
-  stats: {
-    avgRating: number | null;
-    reviewCount: number;
-    window: TimeWindow;
-  };
-}
-
-async function fetchSummary(id: string, window: TimeWindow) {
-  const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
-  const response = await fetch(`${baseUrl}/api/dish/${id}/summary?window=${window}`, { cache: 'no-store' });
-  if (!response.ok) {
-    return null;
-  }
-  return (await response.json()) as DishSummaryResponse;
-}
-
-async function fetchReviews(id: string, window: TimeWindow) {
-  const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
-  const response = await fetch(`${baseUrl}/api/dish/${id}/reviews?window=${window}`, { cache: 'no-store' });
-  if (!response.ok) {
-    return null;
-  }
-  return (await response.json()) as ReviewListResponse;
-}
-
 export default async function DishPage({ params, searchParams }: PageProps) {
   const { id } = params;
   const window = normalizeTimeWindow(searchParams.window, '5d');
   const summaryWindow = '24h' as const;
 
+  // Direct service calls — avoids self-fetch port mismatch issues
   const [summary, reviewsData] = await Promise.all([
-    fetchSummary(id, summaryWindow),
-    fetchReviews(id, window),
+    getDishSummary(id, summaryWindow),
+    getDishReviews(id, window),
   ]);
 
   if (!summary || !reviewsData) {
@@ -127,6 +70,7 @@ export default async function DishPage({ params, searchParams }: PageProps) {
           {/* Reviews & Form */}
           <div className="lg:col-span-2 lg:order-1 space-y-4 sm:space-y-6">
             <ReviewForm dishId={id} />
+            <VoiceReviewChat dishId={id} />
             <ReviewFeed reviews={reviews} />
           </div>
         </div>
@@ -138,7 +82,7 @@ export default async function DishPage({ params, searchParams }: PageProps) {
 // Generate metadata
 export async function generateMetadata({ params }: PageProps) {
   const { id } = params;
-  const summary = await fetchSummary(id, '24h');
+  const summary = await getDishSummary(id, '24h');
   if (summary) {
     return {
       title: `${summary.dish.name} at ${summary.restaurant.name} - FreshBite`,
