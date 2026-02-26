@@ -24,7 +24,7 @@ import { withLogging } from '@/lib/logger';
 
 const log = withLogging('/api/discover');
 
-const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || 'AIzaSyBsyesckcsLLTIxGg7FeEKpHkJn8DoUZzk';
+const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY ?? '';
 
 interface NominatimResult {
   lat: string;

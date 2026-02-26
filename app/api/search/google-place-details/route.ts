@@ -8,7 +8,7 @@ import { cacheGet, cacheSet, googlePlaceDetailsCacheKey, TTL } from '@/lib/redis
  * Place details are cached for 24 hours since they rarely change.
  */
 
-const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || 'AIzaSyBsyesckcsLLTIxGg7FeEKpHkJn8DoUZzk';
+const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY ?? '';
 
 export async function GET(request: NextRequest) {
   try {

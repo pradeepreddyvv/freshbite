@@ -16,7 +16,7 @@ import { cacheGet, cacheSet, googleAutocompleteCacheKey, TTL } from '@/lib/redis
  * If Redis is unavailable, Google API is called directly.
  */
 
-const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || 'AIzaSyBsyesckcsLLTIxGg7FeEKpHkJn8DoUZzk';
+const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY ?? '';
 
 export async function GET(request: NextRequest) {
   try {
