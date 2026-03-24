@@ -2,7 +2,7 @@
 
 > That 4.2-star restaurant? Most of those reviews are from 2022. The chef changed. The oil changed. The rating didn't.
 
-**[Live Site](https://freshbite.live)** | **[Frontend (Vercel)](https://v0-freshbite.vercel.app/)**
+**[Live Site](https://v0-freshbite.vercel.app/)**
 
 FreshBite is a production-ready web application that revolutionizes how people review dishes at restaurants by showing **only time-windowed, fresh reviews**. Built as a complete MVP — because a review from a week ago is data, a review from a year ago is noise.
 
