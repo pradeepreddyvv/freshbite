@@ -1,10 +1,12 @@
 # FreshBite — Freshness-First Dish Reviews
 
-> **"Quality changes daily. See only what matters today."**
+> That 4.2-star restaurant? Most of those reviews are from 2022. The chef changed. The oil changed. The rating didn't.
 
 **[Live Site](https://freshbite.live)** | **[Frontend (Vercel)](https://v0-freshbite.vercel.app/)**
 
-FreshBite is a production-ready full-stack platform with **Next.js 14 frontend**, **Spring Boot microservice backend**, **FastAPI LLM service**, and **PostgreSQL** — deployed on Vercel + DigitalOcean Droplet with Docker. Features time-windowed review queries, live risk scoring, GPS-based restaurant discovery, and LLM-powered insights.
+FreshBite is a production-ready web application that revolutionizes how people review dishes at restaurants by showing **only time-windowed, fresh reviews**. Built as a complete MVP — because a review from a week ago is data, a review from a year ago is noise.
+
+Built with **Next.js 14** + **Spring Boot** + **FastAPI** + **PostgreSQL**, deployed on Vercel + DigitalOcean Droplet with Docker. Features time-windowed review queries, live risk scoring, GPS-based restaurant discovery, and LLM-powered insights.
 
 ---
 
@@ -37,11 +39,11 @@ Build a web app where users can review **specific dishes at specific restaurants
 - ✅ **Global page tracker** (Next.js client + API)
 - ✅ **API endpoints for analytics**
 
-### V2 Extensions (Architecture Ready, Stubs Included)
-- 🔜 **Evidence-based chat** (RAG over time-windowed reviews with citations)
-- 🔜 **Alert subscriptions** (notify when quality drops)
-- 🔜 **Meal slot awareness** (breakfast/lunch/dinner breakdowns)
-- 🔜 **Time-of-day filtering** (show only lunch reviews)
+### Planned Extensions
+- **Evidence-based chat** (RAG over time-windowed reviews with citations)
+- **Alert subscriptions** (notify when quality drops)
+- **Meal slot awareness** (breakfast/lunch/dinner breakdowns)
+- **Time-of-day filtering** (show only lunch reviews)
 
 ---
 
@@ -65,8 +67,8 @@ Build a web app where users can review **specific dishes at specific restaurants
 │  • GET  /api/dish/[id]/reviews?window=5d                    │
 │  • POST /api/dish/[id]/reviews                              │
 │  • GET  /api/dish/[id]/summary?window=24h                   │
-│  • POST /api/chat           (stub - V2)                     │
-│  • POST /api/alerts/run     (stub - V2)                     │
+│  • POST /api/chat           (stub)                           │
+│  • POST /api/alerts/run     (stub)                           │
 │  • POST /api/analytics/pageviews        → Page visit tracking (POST/GET)
 └──────────────────────┬──────────────────────────────────────┘
                        │
@@ -80,7 +82,7 @@ Build a web app where users can review **specific dishes at specific restaurants
 │  • Dish                                                      │
 │  • DishAtRestaurant    (first-class entity)                 │
 │  • Review              (append-only, never deleted)          │
-│  • AlertSubscription   (stub for V2)                        │
+│  • AlertSubscription   (stub)                               │
 │  • PageVisit                      │
 │  • PageVisitCounter               │
 └─────────────────────────────────────────────────────────────┘
@@ -100,7 +102,7 @@ Build a web app where users can review **specific dishes at specific restaurants
 **Review** (Append-only log)
 - Never deleted (freshness enforced by queries, not deletes)
 - `createdAt` in UTC
-- `mealSlot` nullable (V2 feature)
+- `mealSlot` nullable (planned feature)
 
 ### Critical Index
 ```sql
@@ -330,7 +332,7 @@ npm run db:studio        # Open Prisma Studio
 
 ---
 
-## 📈 V2 Roadmap
+## 📈 Roadmap
 
 ### Evidence-Based Chat
 - RAG over time-windowed reviews
@@ -359,7 +361,7 @@ npm run db:studio        # Open Prisma Studio
 Contributions welcome! Key areas:
 1. **UI/UX improvements** (mobile responsiveness, accessibility)
 2. **Performance optimizations** (caching, edge functions)
-3. **V2 feature implementations** (chat, alerts, meal slots)
+3. **Feature implementations** (chat, alerts, meal slots)
 4. **Testing** (unit tests, E2E tests)
 
 ---
