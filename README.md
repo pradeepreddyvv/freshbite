@@ -1,8 +1,10 @@
-# 🍽️ FreshBite — Freshness-First Dish Reviews
+# FreshBite — Freshness-First Dish Reviews
 
 > **"Quality changes daily. See only what matters today."**
 
-FreshBite is a production-ready web application that revolutionizes how people review dishes at restaurants by showing **only time-windowed, fresh reviews**. Built as a complete MVP with V2-ready architecture.
+**[Live Site](https://freshbite.live)** | **[Frontend (Vercel)](https://v0-freshbite.vercel.app/)**
+
+FreshBite is a production-ready full-stack platform with **Next.js 14 frontend**, **Spring Boot microservice backend**, **FastAPI LLM service**, and **PostgreSQL** — deployed on Vercel + DigitalOcean Droplet with Docker. Features time-windowed review queries, live risk scoring, GPS-based restaurant discovery, and LLM-powered insights.
 
 ---
 
